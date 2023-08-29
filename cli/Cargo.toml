@@ -1,0 +1,19 @@
+[package]
+name = "cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+termion = "2"
+libc = "*"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release-pr]
+inherits = "release"
+lto = true
+panic = "abort"
+codegen-units = 1
+strip = true
+opt-level = 3

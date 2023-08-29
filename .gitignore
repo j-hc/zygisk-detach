@@ -1,0 +1,5 @@
+*.zip
+b.sh
+*.so
+test*
+magisk/system/bin/*
