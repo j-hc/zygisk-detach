@@ -78,8 +78,8 @@ pub fn select_menu<L: Display, I: IntoIterator<Item = L> + Clone>(
     ret
 }
 
-pub fn select_menu_with_input<L: Display>(
-    lister: impl Fn(&str) -> Vec<L>,
+pub fn select_menu_with_input<F: Fn(String) -> I, L: Display, I: IntoIterator<Item = L> + Clone>(
+    lister: F,
     prompt: impl Display,
     input_prompt: &str,
     quit: Option<Key>,
@@ -98,8 +98,8 @@ pub fn select_menu_with_input<L: Display>(
             input_prompt.magenta(),
             input,
         )?;
-        let mut list = lister(&input);
-        let list_len = list.len();
+        let list = lister(input.clone());
+        let list_len = list.clone().into_iter().count();
 
         select_idx = select_idx.min(list_len);
         if list_len > 0 {
@@ -107,7 +107,7 @@ pub fn select_menu_with_input<L: Display>(
             write!(stdout, "\n\rENTER to select\r\n")?;
         }
 
-        for (i, selection) in list.iter().enumerate() {
+        for (i, selection) in list.clone().into_iter().enumerate() {
             if i == select_idx {
                 write!(stdout, "{} {}\r\n", prompt, selection.black().white_bg())?;
             } else {
@@ -132,10 +132,10 @@ pub fn select_menu_with_input<L: Display>(
         {
             Key::Char('\n') => {
                 break Ok(if list_len > select_idx {
-                    Some(list.remove(select_idx))
+                    Some(list.into_iter().nth(select_idx).unwrap())
                 } else {
                     None
-                })
+                });
             }
             Key::Up => select_idx = select_idx.saturating_sub(1),
             Key::Down => {

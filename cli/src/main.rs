@@ -80,9 +80,8 @@ fn reattach_menu() -> io::Result<()> {
         return Ok(());
     }
     text!("Select the app to re-attach ('q' to leave):");
-
-    let list: Vec<&str> = detached_apps.iter().map(|e| e.0.as_str()).collect();
-    let Some(i) = select_menu(list.iter(), "✖".red(), Some(Key::Char('q')))? else {
+    let list = detached_apps.iter().map(|e| e.0.as_str());
+    let Some(i) = select_menu(list, "✖".red(), Some(Key::Char('q')))? else {
         return Ok(());
     };
 
@@ -109,27 +108,24 @@ fn get_detached_apps(detach_txt: &[u8]) -> Vec<(String, Range<usize>)> {
 }
 
 #[cfg(target_os = "linux")]
-fn get_installed_apps() -> io::Result<String> {
-    Ok("package:com.app1\npackage:org.xxx2".to_string())
+fn get_installed_apps() -> io::Result<Vec<u8>> {
+    Ok("package:com.app1\npackage:org.xxx2".as_bytes().to_vec())
 }
 
 #[cfg(target_os = "android")]
-fn get_installed_apps() -> io::Result<String> {
-    let c = Command::new("pm")
+fn get_installed_apps() -> io::Result<Vec<u8>> {
+    Ok(Command::new("pm")
         .args(["list", "packages"])
-        .stderr(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
-        .spawn()?;
-    let mut s = String::new();
-    c.stdout.unwrap().read_to_string(&mut s)?;
-    Ok(s)
+        .output()?
+        .stdout)
 }
 
 #[derive(Clone, Copy)]
 enum Op {
-    Reset,
     DetachSelect,
     ReattachSelect,
+    Reset,
     Quit,
     Nop,
 }
@@ -176,20 +172,15 @@ fn main_menu() -> io::Result<Op> {
 fn detach_menu() -> io::Result<()> {
     let installed_apps = get_installed_apps()?;
     let apps: Vec<&str> = installed_apps
-        .lines()
-        .filter_map(|line| line.get("package:".len()..))
+        .split(|&e| e == b'\n')
+        .map(|e| {
+            e.get("package:".len()..)
+                .expect("unexpected output from pm")
+        })
+        .map(|e| std::str::from_utf8(e).expect("non utf-8 package names?"))
         .collect();
     let selected = select_menu_with_input(
-        |input| {
-            if input.len() > 2 {
-                apps.iter()
-                    .filter(|app| app.contains(input))
-                    .take(5)
-                    .collect()
-            } else {
-                Vec::new()
-            }
-        },
+        |input| apps.iter().filter(move |app| app.contains(&input)).take(5),
         "↪".green(),
         "- app: ",
         None,
