@@ -21,29 +21,28 @@ bool getBinder(ino_t* inode, dev_t* dev);
 
 int (*ioctl_orig)(int, int, char*);
 
-#define ARRAY_LEN(arr) (sizeof(arr) / sizeof(arr[0]))
-#define max(a, b) ((a < b) ? b : a)
-
 #define DETACH_CAP 512
-static char DETACH_TXT[DETACH_CAP] = {0};
+static uint8_t DETACH_TXT[DETACH_CAP] = {0};
 static uint32_t DETACH_LEN = 0;
 
 // i could parse IPackageManager onTransact too
 void handle_write(struct binder_transaction_data* btd) {
     if (btd->data_size < 100) return;
-    char* data = (char*)btd->data.ptr.buffer;
+    uint8_t* data = (uint8_t*)btd->data.ptr.buffer;
     size_t end_cur = btd->data_size - 1;
     while (data[end_cur] == 0x0 || data[end_cur] == 0x40) end_cur--;
     // load statics and copy to stack to prevent unnecessary reloads
     uint32_t detach_len = DETACH_LEN;
-    char* detach_txt = DETACH_TXT;
-    uint32_t i = 0;
+    uint8_t* detach_txt = DETACH_TXT;
+    uint8_t* name_ptr = data + end_cur + 1;
+    size_t i = 0;
     while (i < detach_len) {
         uint32_t len = (uint32_t)detach_txt[i];
-        char* ptr = detach_txt + i + sizeof(uint32_t);
-        char* name_ptr = data + end_cur - len + 1;
-        if (!memcmp((void*)ptr, name_ptr, len))
+        uint8_t* detach_ptr = detach_txt + i + sizeof(uint32_t);
+        if (!memcmp((void*)detach_ptr, name_ptr - len, len)) {
             data[end_cur] = 0;
+            break;
+        }
         i += sizeof(uint32_t) + len;
     }
 }
@@ -176,8 +175,6 @@ class Sigringe : public zygisk::ModuleBase {
     // }
 };
 
-REGISTER_ZYGISK_MODULE(Sigringe)
-
 static void companion_handler(int fd) {
     off_t size;
     int f;
@@ -211,15 +208,5 @@ static void companion_handler(int fd) {
     close(f);
 }
 
+REGISTER_ZYGISK_MODULE(Sigringe)
 REGISTER_ZYGISK_COMPANION(companion_handler)
-
-// static int urandom = -1;
-// static void companion_handler(int i) {
-//     if (urandom < 0) {
-//         urandom = open("/dev/urandom", O_RDONLY);
-//     }
-//     unsigned r;
-//     read(urandom, &r, sizeof(r));
-//     LOGD("companion r=[%u]\n", r);
-//     write(i, &r, sizeof(r));
-// }
