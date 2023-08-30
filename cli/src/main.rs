@@ -26,6 +26,10 @@ const SDCARD_DETACH: &str = "detach.bin";
 #[cfg(target_os = "linux")]
 const MODULE_DETACH: &str = "detach_module.txt";
 
+extern "C" {
+    fn kill(pid: i32, sig: i32) -> i32;
+}
+
 fn main() {
     match run() {
         Ok(_) => {}
@@ -33,7 +37,8 @@ fn main() {
     }
 }
 
-fn copy_detach() -> io::Result<u64> {
+fn detach_changed() -> io::Result<u64> {
+    let _ = kill_store();
     fs::copy(SDCARD_DETACH, MODULE_DETACH)
 }
 
@@ -85,7 +90,7 @@ fn reattach_menu() -> io::Result<()> {
     content.drain(detached_apps[i].1.clone());
     detach_txt.set_len(0)?;
     detach_txt.write_all(&content)?;
-    copy_detach()?;
+    detach_changed()?;
     Ok(())
 }
 
@@ -176,7 +181,7 @@ fn detach_menu() -> io::Result<()> {
         .collect();
     let selected = select_menu_with_input(
         |input| {
-            if input.len() <= 2 {
+            if input.len() > 2 {
                 apps.iter()
                     .filter(|app| app.contains(input))
                     .take(5)
@@ -208,10 +213,9 @@ fn detach_menu() -> io::Result<()> {
             f.write_all(&(w.len() as u32).to_le_bytes())?;
             f.write_all(&w)?;
             f.flush()?;
-            let _ = kill_store();
             textln!("{} {}", "detach:".green(), detach_app);
             textln!("Changes are applied. No need for a reboot!");
-            copy_detach()?;
+            detach_changed()?;
         } else {
             textln!("{} {}", "already detached:".green(), detach_app);
         }
@@ -249,7 +253,7 @@ fn kill_store() -> io::Result<()> {
                 let Ok(pid) = pid.parse::<i32>() else {
                     continue;
                 };
-                unsafe { libc::kill(pid, libc::SIGKILL) };
+                unsafe { kill(pid, 9) };
             }
         }
     }

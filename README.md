@@ -9,7 +9,7 @@ Hooks libbinder with zygisk instead of applying SQL queries to database files
 * Enable zygisk in magisk or ZygiskOnKernelSU module if you are using KernelSU
 * Flash zygisk-detach module
 * Reboot
-* Run helper cli in termux:
+* Run helper cli in termux:  
 	`$ detach` or `$ su -c detach`
 * Select apps you wish to detach. Changes are applied immediately, no need to reboot.
 

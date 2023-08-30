@@ -30,18 +30,20 @@ static uint32_t DETACH_LEN = 0;
 
 // i could parse IPackageManager onTransact too
 void handle_write(struct binder_transaction_data* btd) {
-    if (btd->data_size <= 128) return;
+    if (btd->data_size < 100) return;
     char* data = (char*)btd->data.ptr.buffer;
     size_t end_cur = btd->data_size - 1;
-    while (data[end_cur] == 0) end_cur--;
+    while (data[end_cur] == 0x0 || data[end_cur] == 0x40) end_cur--;
 
-    uint32_t len = 0;
-    for (uint32_t i = 0; i < DETACH_LEN; i += sizeof(uint32_t) + len) {
-        len = (uint32_t)DETACH_TXT[i];
+    uint32_t detach_len = DETACH_LEN;
+    uint32_t i = 0;
+    while (i < detach_len) {
+        uint32_t len = (uint32_t)DETACH_TXT[i];
         char* ptr = DETACH_TXT + i + sizeof(uint32_t);
-        char* pkg_start = data + end_cur - len + 1;
-        if (!memcmp((void*)ptr, pkg_start, len))
+        char* name_ptr = data + end_cur - len + 1;
+        if (!memcmp((void*)ptr, name_ptr, len))
             data[end_cur] = 0;
+        i += sizeof(uint32_t) + len;
     }
 }
 
@@ -90,7 +92,7 @@ class Sigringe : public zygisk::ModuleBase {
         if (getBinder(&inode, &dev)) {
             this->api->pltHookRegister(dev, inode, "ioctl", (void**)&ioctl_hook, (void**)&ioctl_orig);
             if (this->api->pltHookCommit()) {
-                LOGD("Loaded!");
+                // LOGD("Loaded!");
             } else {
                 LOGD("ERROR: pltHookCommit");
                 api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);

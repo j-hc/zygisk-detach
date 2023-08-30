@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 termion = "2"
-libc = "*"
 
 [profile.dev]
 panic = "abort"
