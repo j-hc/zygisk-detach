@@ -27,18 +27,18 @@ macro_rules! textln {
     }};
 }
 
-pub fn select_menu<L: Display, I: IntoIterator<Item = L> + Clone>(
+pub fn select_menu<L: Display, I: Iterator<Item = L> + Clone>(
     list: I,
     prompt: impl Display,
     quit: Option<Key>,
 ) -> io::Result<Option<usize>> {
     let mut stdout = BufWriter::new(io::stdout().lock().into_raw_mode()?);
     let mut select_idx = 0;
-    let list_len = list.clone().into_iter().count();
+    let list_len = list.clone().count();
     let mut keys = io::stdin().lock().keys();
     write!(stdout, "{}", cursor::Hide)?;
     let ret = loop {
-        for (i, selection) in list.clone().into_iter().enumerate() {
+        for (i, selection) in list.clone().enumerate() {
             if i == select_idx {
                 write!(stdout, "{} {}\r\n", prompt, selection.black().white_bg())?;
             } else {
@@ -78,7 +78,7 @@ pub fn select_menu<L: Display, I: IntoIterator<Item = L> + Clone>(
     ret
 }
 
-pub fn select_menu_with_input<F: Fn(String) -> I, L: Display, I: IntoIterator<Item = L> + Clone>(
+pub fn select_menu_with_input<F: Fn(String) -> I, L: Display, I: Iterator<Item = L> + Clone>(
     lister: F,
     prompt: impl Display,
     input_prompt: &str,
@@ -99,7 +99,7 @@ pub fn select_menu_with_input<F: Fn(String) -> I, L: Display, I: IntoIterator<It
             input,
         )?;
         let list = lister(input.clone());
-        let list_len = list.clone().into_iter().count();
+        let list_len = list.clone().count();
 
         select_idx = select_idx.min(list_len);
         if list_len > 0 {
@@ -107,7 +107,7 @@ pub fn select_menu_with_input<F: Fn(String) -> I, L: Display, I: IntoIterator<It
             write!(stdout, "\n\rENTER to select\r\n")?;
         }
 
-        for (i, selection) in list.clone().into_iter().enumerate() {
+        for (i, selection) in list.clone().enumerate() {
             if i == select_idx {
                 write!(stdout, "{} {}\r\n", prompt, selection.black().white_bg())?;
             } else {

@@ -34,12 +34,13 @@ void handle_write(struct binder_transaction_data* btd) {
     char* data = (char*)btd->data.ptr.buffer;
     size_t end_cur = btd->data_size - 1;
     while (data[end_cur] == 0x0 || data[end_cur] == 0x40) end_cur--;
-
+    // load statics and copy to stack to prevent unnecessary reloads
     uint32_t detach_len = DETACH_LEN;
+    char* detach_txt = DETACH_TXT;
     uint32_t i = 0;
     while (i < detach_len) {
-        uint32_t len = (uint32_t)DETACH_TXT[i];
-        char* ptr = DETACH_TXT + i + sizeof(uint32_t);
+        uint32_t len = (uint32_t)detach_txt[i];
+        char* ptr = detach_txt + i + sizeof(uint32_t);
         char* name_ptr = data + end_cur - len + 1;
         if (!memcmp((void*)ptr, name_ptr, len))
             data[end_cur] = 0;
