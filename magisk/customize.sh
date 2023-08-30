@@ -8,7 +8,9 @@ if [ -f "$NVBASE/modules/zygisk-detach/detach.bin" ]; then
 	ui_print "- Preserving existing detach.bin"
 	cp -f "$NVBASE/modules/zygisk-detach/detach.bin" "$MODPATH/detach.bin"
 fi
-echo "alias detach='su -c detach'" >/data/data/com.termux/files/home/.bashrc
+ALIAS="alias detach='su -c detach'"
+BASHRC="/data/data/com.termux/files/home/.bashrc"
+grep -qxF "$ALIAS" "$BASHRC" || echo "$ALIAS" >>"$BASHRC"
 
 ui_print "- Run 'detach' or 'su -c detach' in termux after the reboot"
 ui_print "  by j-hc (github.com/j-hc)"
