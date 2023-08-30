@@ -171,7 +171,7 @@ fn main_menu() -> io::Result<Op> {
 
 fn detach_menu() -> io::Result<()> {
     let installed_apps = get_installed_apps()?;
-    let apps: Vec<&str> = installed_apps
+    let apps: Vec<&str> = installed_apps[..installed_apps.len() - 1]
         .split(|&e| e == b'\n')
         .map(|e| {
             e.get("package:".len()..)
@@ -180,7 +180,16 @@ fn detach_menu() -> io::Result<()> {
         .map(|e| std::str::from_utf8(e).expect("non utf-8 package names?"))
         .collect();
     let selected = select_menu_with_input(
-        |input| apps.iter().filter(move |app| app.contains(&input)).take(5),
+        |input| {
+            if input.len() > 2 {
+                apps.iter()
+                    .filter(move |app| app.contains(input))
+                    .take(5)
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        },
         "↪".green(),
         "- app: ",
         None,

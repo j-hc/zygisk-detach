@@ -78,7 +78,7 @@ pub fn select_menu<L: Display, I: Iterator<Item = L> + Clone>(
     ret
 }
 
-pub fn select_menu_with_input<F: Fn(String) -> I, L: Display, I: Iterator<Item = L> + Clone>(
+pub fn select_menu_with_input<F: Fn(&str) -> Vec<L>, L: Display>(
     lister: F,
     prompt: impl Display,
     input_prompt: &str,
@@ -98,8 +98,8 @@ pub fn select_menu_with_input<F: Fn(String) -> I, L: Display, I: Iterator<Item =
             input_prompt.magenta(),
             input,
         )?;
-        let list = lister(input.clone());
-        let list_len = list.clone().count();
+        let mut list = lister(&input);
+        let list_len = list.len();
 
         select_idx = select_idx.min(list_len);
         if list_len > 0 {
@@ -107,7 +107,7 @@ pub fn select_menu_with_input<F: Fn(String) -> I, L: Display, I: Iterator<Item =
             write!(stdout, "\n\rENTER to select\r\n")?;
         }
 
-        for (i, selection) in list.clone().enumerate() {
+        for (i, selection) in list.iter().enumerate() {
             if i == select_idx {
                 write!(stdout, "{} {}\r\n", prompt, selection.black().white_bg())?;
             } else {
@@ -132,7 +132,7 @@ pub fn select_menu_with_input<F: Fn(String) -> I, L: Display, I: Iterator<Item =
         {
             Key::Char('\n') => {
                 break Ok(if list_len > select_idx {
-                    Some(list.into_iter().nth(select_idx).unwrap())
+                    Some(list.remove(select_idx))
                 } else {
                     None
                 });
