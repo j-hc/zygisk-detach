@@ -1,18 +1,20 @@
-#![feature(iter_intersperse)]
+#![feature(iter_intersperse, print_internals)]
 
+use std::fmt::Display;
 use std::fs;
 use std::io::{self, Seek};
 use std::io::{BufWriter, Read, Write};
 use std::ops::Range;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 use termion::event::Key;
-use termion::input::TermRead;
-use termion::raw::IntoRawMode;
 use termion::{clear, cursor};
 
 mod colorize;
 use colorize::ToColored;
+
+mod menus;
+use menus::{select_menu, select_menu_numbered, select_menu_with_input};
 
 #[cfg(target_os = "android")]
 const SDCARD_DETACH: &str = "/sdcard/detach.bin";
@@ -36,33 +38,31 @@ fn copy_detach() -> io::Result<u64> {
 }
 
 fn run() -> io::Result<()> {
-    let mut stdout = BufWriter::new(io::stdout().lock().into_raw_mode()?);
-    write!(stdout, "zygisk-detach cli by github.com/j-hc\r\n\n")?;
+    print!("zygisk-detach cli by github.com/j-hc\r\n\n");
     loop {
-        match main_menu(&mut stdout)? {
-            Op::Select => select(&mut stdout)?,
-            Op::Remove => remove_menu(&mut stdout)?,
+        match main_menu()? {
+            Op::DetachSelect => detach_menu()?,
+            Op::ReattachSelect => reattach_menu()?,
             Op::Reset => {
                 let d1 = fs::remove_file(SDCARD_DETACH);
                 let d2 = fs::remove_file(MODULE_DETACH);
                 if d1.is_ok() || d2.is_ok() {
                     let _ = kill_store();
-                    write!(stdout, "Reset\r\n")?;
+                    text!("Reset");
                 } else {
-                    write!(stdout, "Already empty\r\n")?;
+                    text!("Already empty");
                 }
             }
-            Op::Wrong(c) => write!(stdout, "Wrong selection {c:?}\r\n")?,
             Op::Quit => return Ok(()),
             Op::Nop => {}
         }
     }
 }
 
-fn remove_menu(mut stdout: impl Write) -> io::Result<()> {
+fn reattach_menu() -> io::Result<()> {
     let openf = |p| fs::OpenOptions::new().write(true).read(true).open(p);
     let Ok(mut detach_txt) = openf(SDCARD_DETACH).or_else(|_| openf(MODULE_DETACH)) else {
-        write!(stdout, "No detach.bin was found!\r\n")?;
+        text!("No detach.bin was found!");
         return Ok(());
     };
     let mut content = Vec::new();
@@ -71,58 +71,22 @@ fn remove_menu(mut stdout: impl Write) -> io::Result<()> {
     let detached_apps = get_detached_apps(&content);
     let detach_len = detached_apps.len();
     if detach_len == 0 {
-        write!(stdout, "detach.bin is empty\r\n")?;
+        text!("detach.bin is empty");
         return Ok(());
     }
+    text!("Select the app to re-attach ('q' to leave):");
 
-    write!(stdout, "{}", cursor::Hide)?;
-    let mut keys = io::stdin().lock().keys().flatten();
-    let mut app_i: usize = 0;
-    write!(stdout, "\nSelect the app to re-attach ('q' to leave):\r\n")?;
-    loop {
-        for (i, app) in detached_apps.iter().map(|m| &m.0).enumerate() {
-            if i == app_i {
-                write!(stdout, "{} {}\r\n", "✖".red(), app.black().white_bg())?;
-            } else {
-                write!(stdout, "{}\r\n", app)?;
-            }
-        }
-        macro_rules! reset {
-            ($up: expr) => {
-                write!(stdout, "\r{}{}", cursor::Up($up as u16), clear::AfterCursor)?
-            };
-        }
-        stdout.flush()?;
+    let list: Vec<&str> = detached_apps.iter().map(|e| e.0.as_str()).collect();
+    let Some(i) = select_menu(list.iter(), "✖".red(), Some(Key::Char('q')))? else {
+        return Ok(());
+    };
 
-        match keys.next().unwrap() {
-            Key::Char('q') | Key::Ctrl('c') => {
-                reset!(detach_len + 1);
-                return Ok(());
-            }
-            Key::Char('\n') => {
-                reset!(detach_len + 1);
-                write!(
-                    stdout,
-                    "{}: {}\r\n",
-                    "re-attach".red(),
-                    detached_apps[app_i].0
-                )?;
-                content.drain(detached_apps[app_i].1.clone());
-                detach_txt.set_len(0)?;
-                detach_txt.write_all(&content)?;
-                copy_detach()?;
-                return Ok(());
-            }
-            Key::Up => app_i = app_i.saturating_sub(1),
-            Key::Down => {
-                if app_i + 1 < detach_len {
-                    app_i += 1;
-                }
-            }
-            _ => {}
-        }
-        reset!(detach_len);
-    }
+    textln!("{}: {}", "re-attach".red(), detached_apps[i].0);
+    content.drain(detached_apps[i].1.clone());
+    detach_txt.set_len(0)?;
+    detach_txt.write_all(&content)?;
+    copy_detach()?;
+    Ok(())
 }
 
 fn get_detached_apps(detach_txt: &[u8]) -> Vec<(String, Range<usize>)> {
@@ -139,11 +103,17 @@ fn get_detached_apps(detach_txt: &[u8]) -> Vec<(String, Range<usize>)> {
     detached
 }
 
+#[cfg(target_os = "linux")]
+fn get_installed_apps() -> io::Result<String> {
+    Ok("package:com.app1\npackage:org.xxx2".to_string())
+}
+
+#[cfg(target_os = "android")]
 fn get_installed_apps() -> io::Result<String> {
     let c = Command::new("pm")
         .args(["list", "packages"])
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
         .spawn()?;
     let mut s = String::new();
     c.stdout.unwrap().read_to_string(&mut s)?;
@@ -153,75 +123,73 @@ fn get_installed_apps() -> io::Result<String> {
 #[derive(Clone, Copy)]
 enum Op {
     Reset,
-    Select,
-    Remove,
+    DetachSelect,
+    ReattachSelect,
     Quit,
     Nop,
-    Wrong(char),
 }
-fn main_menu(mut stdout: impl Write) -> io::Result<Op> {
+
+fn main_menu() -> io::Result<Op> {
     struct OpText {
         desc: &'static str,
         op: Op,
-        c: char,
     }
     impl OpText {
-        fn new(desc: &'static str, op: Op, c: char) -> Self {
-            Self { desc, op, c }
+        fn new(desc: &'static str, op: Op) -> Self {
+            Self { desc, op }
+        }
+    }
+    impl Display for OpText {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.desc)
         }
     }
     let ops = [
-        OpText::new("Select app to detach", Op::Select, '1'),
-        OpText::new("Remove detached app", Op::Remove, '2'),
-        OpText::new("Reset detached apps", Op::Reset, '3'),
-        OpText::new("Quit", Op::Quit, 'q'),
+        OpText::new("Select app to detach", Op::DetachSelect),
+        OpText::new("Re-attach app", Op::ReattachSelect),
+        OpText::new("Reset detached apps", Op::Reset),
+        OpText::new("Quit", Op::Quit),
     ];
-    write!(stdout, "{}", cursor::Hide)?;
-    write!(stdout, "- Selection: \r\n")?;
-    for optxt in ops.iter() {
-        write!(stdout, "{}. {}\r\n", optxt.c.green(), optxt.desc)?;
+    let i = select_menu_numbered(ops.iter(), Some(Key::Char('q')), "- Selection:")?;
+    match i {
+        menus::SelectNumberedResp::Index(i) => Ok(ops[i].op),
+        menus::SelectNumberedResp::UndefinedKey(Key::Char(c)) => {
+            text!("Undefined key {c:?}");
+            Ok(Op::Nop)
+        }
+        menus::SelectNumberedResp::UndefinedKey(
+            k @ (Key::Down | Key::Up | Key::Left | Key::Right),
+        ) => {
+            text!("Undefined key {k:?}");
+            Ok(Op::Nop)
+        }
+        menus::SelectNumberedResp::Quit => Ok(Op::Quit),
+        _ => Ok(Op::Nop),
     }
-    writeln!(stdout)?;
-    stdout.flush()?;
-
-    let key = io::stdin().keys().next().unwrap()?;
-
-    let op = ops
-        .iter()
-        .find(|optxt| matches!(key, Key::Char(c) if c == optxt.c))
-        .map(|optxt| optxt.op)
-        .or(match key {
-            Key::Char(c) => Some(Op::Wrong(c)),
-            Key::Ctrl('c') => Some(Op::Quit),
-            _ => Some(Op::Nop),
-        })
-        .unwrap();
-
-    let up = if matches!(op, Op::Nop) {
-        2 + ops.len() as u16
-    } else {
-        3 + ops.len() as u16
-    };
-    write!(
-        stdout,
-        "\r{}{}{}",
-        cursor::Up(up),
-        clear::AfterCursor,
-        cursor::Show
-    )?;
-    stdout.flush()?;
-
-    Ok(op)
 }
 
-fn select(mut stdout: impl Write) -> io::Result<()> {
+fn detach_menu() -> io::Result<()> {
     let installed_apps = get_installed_apps()?;
     let apps: Vec<&str> = installed_apps
         .lines()
         .filter_map(|line| line.get("package:".len()..))
         .collect();
-
-    if let Some(detach_app) = select_menu(&apps, &mut stdout)? {
+    let selected = select_menu_with_input(
+        |input| {
+            if input.len() <= 2 {
+                apps.iter()
+                    .filter(|app| app.contains(input))
+                    .take(5)
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        },
+        "↪".green(),
+        "- app: ",
+        None,
+    )?;
+    if let Some(detach_app) = selected {
         let mut f = fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -229,7 +197,7 @@ fn select(mut stdout: impl Write) -> io::Result<()> {
             .open(SDCARD_DETACH)?;
         let mut buf: Vec<u8> = Vec::new();
         f.read_to_end(&mut buf)?;
-        if !get_detached_apps(&buf).iter().any(|d| d.0 == detach_app) {
+        if !get_detached_apps(&buf).iter().any(|d| &d.0 == detach_app) {
             let w = detach_app
                 .as_bytes()
                 .iter()
@@ -241,111 +209,14 @@ fn select(mut stdout: impl Write) -> io::Result<()> {
             f.write_all(&w)?;
             f.flush()?;
             let _ = kill_store();
-            write!(stdout, "Changes are applied. No need for a reboot!\r\n\n")?;
+            textln!("{} {}", "detach:".green(), detach_app);
+            textln!("Changes are applied. No need for a reboot!");
             copy_detach()?;
         } else {
-            write!(stdout, "App is already detached\r\n\n")?;
+            textln!("{} {}", "already detached:".green(), detach_app);
         }
-        stdout.flush()?;
     }
     Ok(())
-}
-
-fn select_menu<'a>(apps: &[&'a str], mut stdout: impl Write) -> Result<Option<&'a str>, io::Error> {
-    const PROMPT: &str = "- app: ";
-    let mut input_cursor = 0;
-    let mut found_i = 0;
-    // let mut input = UTF32String { inner: Vec::new() };
-    let mut input = String::new();
-    let mut keys = io::stdin().lock().keys().flatten();
-    write!(stdout, "\n\n{}", cursor::Up(2))?;
-    loop {
-        write!(
-            stdout,
-            "\r{}{}{}\r{}{}",
-            clear::AfterCursor,
-            PROMPT.magenta(),
-            input,
-            cursor::Right(PROMPT.len() as u16 + input_cursor as u16),
-            cursor::Save
-        )?;
-
-        fn find_app<'a>(apps: &[&'a str], input: &str) -> [Option<&'a str>; 5] {
-            let mut ret = [None; 5];
-            if input.len() <= 2 {
-                return ret;
-            }
-            apps.iter()
-                .filter(|app| app.contains(input))
-                .take(5)
-                .enumerate()
-                .for_each(|(i, app)| ret[i] = Some(app));
-            ret
-        }
-        let found_app = find_app(apps, &input);
-
-        if found_app.iter().flatten().count() > 0 {
-            write!(stdout, "\r\n\n↑ and ↓ to navigate")?;
-            write!(stdout, "\n\rENTER to select\r\n")?;
-        }
-        for (i, app) in found_app.iter().flatten().enumerate() {
-            if i == found_i {
-                write!(stdout, "{} {}\r\n", "↪".green(), app.black().white_bg())?;
-            } else {
-                write!(stdout, "{}\r\n", app.faint())?;
-            }
-        }
-        write!(stdout, "{}", cursor::Restore)?;
-        stdout.flush()?;
-
-        let Some(key) = keys.next() else {
-            return Ok(None);
-        };
-        match key {
-            Key::Char('\n') => {
-                write!(stdout, "{}\r{}", cursor::Restore, clear::AfterCursor)?;
-                match found_app[found_i] {
-                    Some(found_app) => {
-                        write!(stdout, "{} {}", "detached:".green(), found_app)?;
-                    }
-                    None => {
-                        write!(stdout, "{}", "No app was selected".red())?;
-                    }
-                }
-                write!(stdout, "\n\r")?;
-                stdout.flush()?;
-                return Ok(found_app[found_i]);
-            }
-            Key::Backspace => {
-                if input_cursor > 0 {
-                    input_cursor -= 1;
-                    input.remove(input_cursor);
-                }
-            }
-            Key::Char(c) => {
-                input.insert(input_cursor, c);
-                input_cursor += 1;
-            }
-            Key::Right => {
-                if input_cursor < input.len() {
-                    input_cursor += 1
-                }
-            }
-            Key::Left => input_cursor = input_cursor.saturating_sub(1),
-            Key::Up => found_i = found_i.saturating_sub(1),
-            Key::Down => {
-                if found_i < 4 && found_app[found_i + 1].is_some() {
-                    found_i += 1;
-                }
-            }
-            Key::Ctrl('c') => {
-                write!(stdout, "{}\r{}", cursor::Restore, clear::AfterCursor)?;
-                stdout.flush()?;
-                return Ok(None);
-            }
-            _ => {}
-        }
-    }
 }
 
 fn _kill_store_am() -> io::Result<()> {

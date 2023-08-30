@@ -83,3 +83,11 @@ pub trait ToColored: Display + Sized {
 }
 
 impl<D: Display> ToColored for D {}
+
+impl<D> std::ops::Deref for Colored<D> {
+    type Target = D;
+
+    fn deref(&self) -> &Self::Target {
+        &self.d
+    }
+}
