@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/sendfile.h>
+#include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <unistd.h>
 
@@ -23,7 +24,7 @@ int (*ioctl_orig)(int, int, char*);
 
 #define DETACH_CAP 512
 static uint8_t DETACH_TXT[DETACH_CAP] = {0};
-static uint32_t DETACH_LEN = 0;
+static size_t DETACH_LEN = 0;
 
 // i could parse IPackageManager onTransact too
 void handle_write(struct binder_transaction_data* btd) {
@@ -32,7 +33,7 @@ void handle_write(struct binder_transaction_data* btd) {
     size_t end_cur = btd->data_size - 1;
     while (data[end_cur] == 0x0 || data[end_cur] == 0x40) end_cur--;
     // load statics and copy to stack to prevent unnecessary reloads
-    uint32_t detach_len = DETACH_LEN;
+    size_t detach_len = DETACH_LEN;
     uint8_t* detach_txt = DETACH_TXT;
     uint8_t* name_ptr = data + end_cur + 1;
     size_t i = 0;
@@ -48,10 +49,10 @@ void handle_write(struct binder_transaction_data* btd) {
 }
 
 int ioctl_hook(int fd, int request, char* argp) {
-    if (request == (int)0xC0306201) {  // BINDER_WRITE_READ
+    if (request == (int)BINDER_WRITE_READ) {
         struct binder_write_read* bwr = (struct binder_write_read*)argp;
         if (bwr->write_size > 0) {
-            uint32_t cmd = (*(uint32_t*)bwr->write_buffer);
+            uint32_t cmd = *((uint32_t*)bwr->write_buffer);
             auto btd = (struct binder_transaction_data*)((char*)bwr->write_buffer + bwr->write_consumed + sizeof(cmd));
             switch (cmd) {
                 case BC_TRANSACTION:
@@ -83,7 +84,7 @@ class Sigringe : public zygisk::ModuleBase {
         env->ReleaseStringUTFChars(args->nice_name, process);
         api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        DETACH_LEN = this->read_from_companion();
+        DETACH_LEN = (size_t)this->read_from_companion();
         if (DETACH_LEN <= 0)
             return;
 
@@ -175,37 +176,37 @@ class Sigringe : public zygisk::ModuleBase {
     // }
 };
 
-static void companion_handler(int fd) {
+static void companion_handler(int remote_fd) {
     off_t size;
-    int f;
-    f = open("/sdcard/detach.bin", O_RDONLY);
-    if (f <= 0) {
-        f = open("/data/adb/modules/zygisk-detach/detach.bin", O_RDONLY);
-        if (f <= 0) {
-            LOGD("ERROR: no detach.bin found");
+    int fd;
+    fd = open("/sdcard/detach.bin", O_RDONLY);
+    if (fd <= 0) {
+        fd = open("/data/adb/modules/zygisk-detach/detach.bin", O_RDONLY);
+        if (fd <= 0) {
+            LOGD("ERROR: open detach.bin");
             size = 0;
-            write(fd, &size, sizeof(size));
+            write(remote_fd, &size, sizeof(size));
             return;
         }
     }
-    size = lseek(f, 0, SEEK_END);
-    if (size < 0) {
-        LOGD("ERROR: lseek");
-        close(f);
+    struct stat st;
+    if (fstat(fd, &st) == -1) {
+        LOGD("ERROR: fstat");
+        close(fd);
         return;
     }
-    lseek(f, 0, SEEK_SET);
-    if (write(fd, &size, sizeof(size)) < 0) {
-        LOGD("ERROR: write size");
-        close(f);
+    size = st.st_size;
+    if (write(remote_fd, &size, sizeof(size)) < 0) {
+        LOGD("ERROR: write remote_fd");
+        close(fd);
         return;
     }
-    if (sendfile(fd, f, NULL, size) < 0) {
+    if (sendfile(remote_fd, fd, NULL, size) < 0) {
         LOGD("ERROR: sendfile");
-        close(f);
+        close(fd);
         return;
     }
-    close(f);
+    close(fd);
 }
 
 REGISTER_ZYGISK_MODULE(Sigringe)

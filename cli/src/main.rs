@@ -5,7 +5,7 @@ use std::fs;
 use std::io::{self, Seek};
 use std::io::{BufWriter, Read, Write};
 use std::ops::Range;
-use std::process::Command;
+use std::process::{Command, ExitCode};
 
 use termion::event::Key;
 use termion::{clear, cursor};
@@ -30,10 +30,13 @@ extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
 }
 
-fn main() {
+fn main() -> ExitCode {
     match run() {
-        Ok(_) => {}
-        Err(err) => eprintln!("\rERROR: {err}"),
+        Ok(_) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("\rERROR: {err}");
+            ExitCode::FAILURE
+        }
     }
 }
 
@@ -169,6 +172,20 @@ fn main_menu() -> io::Result<Op> {
     }
 }
 
+fn bin_serialize(app: &str, sink: impl Write) -> io::Result<()> {
+    let w = app
+        .as_bytes()
+        .iter()
+        .intersperse(&0)
+        .cloned()
+        .collect::<Vec<u8>>();
+    let mut f = BufWriter::new(sink);
+    f.write_all(&(w.len() as u32).to_le_bytes())?;
+    f.write_all(&w)?;
+    f.flush()?;
+    Ok(())
+}
+
 fn detach_menu() -> io::Result<()> {
     let installed_apps = get_installed_apps()?;
     let apps: Vec<&str> = installed_apps[..installed_apps.len() - 1]
@@ -183,7 +200,7 @@ fn detach_menu() -> io::Result<()> {
         |input| {
             if input.len() > 2 {
                 apps.iter()
-                    .filter(move |app| app.contains(input))
+                    .filter(move |app| app.contains(input.trim()))
                     .take(5)
                     .collect()
             } else {
@@ -202,17 +219,8 @@ fn detach_menu() -> io::Result<()> {
             .open(SDCARD_DETACH)?;
         let mut buf: Vec<u8> = Vec::new();
         f.read_to_end(&mut buf)?;
-        if !get_detached_apps(&buf).iter().any(|d| &d.0 == detach_app) {
-            let w = detach_app
-                .as_bytes()
-                .iter()
-                .intersperse(&0)
-                .cloned()
-                .collect::<Vec<u8>>();
-            let mut f = BufWriter::new(f);
-            f.write_all(&(w.len() as u32).to_le_bytes())?;
-            f.write_all(&w)?;
-            f.flush()?;
+        if !get_detached_apps(&buf).iter().any(|(s, _)| s == detach_app) {
+            bin_serialize(detach_app, f)?;
             textln!("{} {}", "detach:".green(), detach_app);
             textln!("Changes are applied. No need for a reboot!");
             detach_changed()?;

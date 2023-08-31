@@ -16,7 +16,7 @@ macro_rules! text {
             format_args!($($arg)*),
             cursor::Down(1)
         )?;
-        ::std::io::stdout().flush().unwrap();
+        ::std::io::stdout().flush()?;
     }};
 }
 
@@ -175,16 +175,16 @@ pub enum SelectNumberedResp {
     Quit,
 }
 
-pub fn select_menu_numbered<L: Display, I: IntoIterator<Item = L> + Clone>(
+pub fn select_menu_numbered<L: Display, I: Iterator<Item = L> + Clone>(
     list: I,
     quit: Option<Key>,
     title: &str,
 ) -> io::Result<SelectNumberedResp> {
     let mut stdout = BufWriter::new(io::stdout().lock().into_raw_mode()?);
-    let list_len = list.clone().into_iter().count();
+    let list_len = list.clone().count();
     write!(stdout, "\r{title}\r\n")?;
     write!(stdout, "{}", cursor::Hide)?;
-    for (i, s) in list.clone().into_iter().enumerate() {
+    for (i, s) in list.enumerate() {
         write!(stdout, "{}. {}\r\n", (i + 1).green(), s)?;
     }
     stdout.flush()?;
