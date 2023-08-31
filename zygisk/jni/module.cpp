@@ -18,8 +18,6 @@ using zygisk::ServerSpecializeArgs;
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "zygisk-detach", __VA_ARGS__)
 
-bool getBinder(ino_t* inode, dev_t* dev);
-
 int (*ioctl_orig)(int, int, char*);
 
 #define DETACH_CAP 512
@@ -35,12 +33,12 @@ void handle_write(struct binder_transaction_data* btd) {
     // load statics and copy to stack to prevent unnecessary reloads
     size_t detach_len = DETACH_LEN;
     uint8_t* detach_txt = DETACH_TXT;
-    uint8_t* name_ptr = data + end_cur + 1;
+    uint8_t* end_ptr = data + end_cur + 1;
     size_t i = 0;
     while (i < detach_len) {
         uint32_t len = (uint32_t)detach_txt[i];
         uint8_t* detach_ptr = detach_txt + i + sizeof(uint32_t);
-        if (!memcmp((void*)detach_ptr, name_ptr - len, len)) {
+        if (!memcmp((void*)detach_ptr, end_ptr - len, len)) {
             data[end_cur] = 0;
             break;
         }
@@ -84,9 +82,13 @@ class Sigringe : public zygisk::ModuleBase {
         env->ReleaseStringUTFChars(args->nice_name, process);
         api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
-        DETACH_LEN = (size_t)this->read_from_companion();
-        if (DETACH_LEN <= 0)
+        int fd = api->connectCompanion();
+        DETACH_LEN = this->read_companion(fd);
+        close(fd);
+        if (DETACH_LEN == 0) {
+            api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
             return;
+        }
 
         ino_t inode;
         dev_t dev;
@@ -128,83 +130,61 @@ class Sigringe : public zygisk::ModuleBase {
         return false;
     }
 
-    off_t read_from_companion() {
-        auto fd = api->connectCompanion();
+    size_t read_companion(int fd) {
         off_t size;
         if (read(fd, &size, sizeof(size)) < 0) {
-            LOGD("ERROR: read fd");
-            return -1;
+            LOGD("ERROR: read companion size");
+            return 0;
         }
-        if (size > DETACH_CAP) {
-            LOGD("ERROR: detach.bin is larger than %d bytes", DETACH_CAP);
-            return -1;
+        if (size <= 0) {
+            LOGD("ERROR: detach.bin <= 0");
+            return 0;
+        } else if (size > DETACH_CAP) {
+            LOGD("ERROR: detach.bin > %d", DETACH_CAP);
+            return 0;
         }
         int received = 0;
         while (received < size) {
             auto red = read(fd, DETACH_TXT + received, size - received);
             if (red < 0) {
-                LOGD("ERROR: read fd 2");
-                return -1;
+                LOGD("ERROR: read companion");
+                return 0;
             }
             received += red;
         }
-        return size;
+        return (size_t)size;
     }
-
-    // bool parse_pkgs(off_t size) {
-    //     bool st = false;
-    //     size += 1;  // hack for always including a 0 at the end
-    //     for (size_t i = 0; i < (size_t)size + 1; i++) {
-    //         char c = DETACH_TXT[i];
-    //         if (!(c == '\n' || c == ' ' || c == '\t' || c == '\r' || c == 0)) {
-    //             if (!st) {
-    //                 PKGS[PKGS_LEN++] = (uintptr_t)(DETACH_TXT + i);
-    //                 st = true;
-    //             }
-    //         } else if (st) {
-    //             st = false;
-    //             size_t sz = (uintptr_t)(DETACH_TXT + i) - PKGS[PKGS_LEN - 1];
-    //             PKGS[PKGS_LEN - 1] |= (uintptr_t)sz << (sizeof(uintptr_t) * 7);  // store the length in MSB
-    //         }
-    //     }
-    //     if (PKGS_LEN > PKGS_CAP) {
-    //         LOGD("ERROR: cant have more than %d apps in the detach.bin", PKGS_CAP);
-    //         return false;
-    //     }
-
-    //     return true;
-    // }
 };
 
 static void companion_handler(int remote_fd) {
-    off_t size;
-    int fd;
-    fd = open("/sdcard/detach.bin", O_RDONLY);
-    if (fd <= 0) {
+    off_t size = 0;
+    int fd = open("/sdcard/detach.bin", O_RDONLY);
+    if (fd == -1)
         fd = open("/data/adb/modules/zygisk-detach/detach.bin", O_RDONLY);
-        if (fd <= 0) {
-            LOGD("ERROR: open detach.bin");
-            size = 0;
-            write(remote_fd, &size, sizeof(size));
-            return;
-        }
+    if (fd == -1) {
+        LOGD("ERROR: companion open");
+        if (write(remote_fd, &size, sizeof(size)) < 0)
+            LOGD("ERROR: write remote_fd 1");
+        return;
     }
+
     struct stat st;
     if (fstat(fd, &st) == -1) {
         LOGD("ERROR: fstat");
+        if (write(remote_fd, &size, sizeof(size)) < 0)
+            LOGD("ERROR: write remote_fd 2");
         close(fd);
         return;
     }
     size = st.st_size;
     if (write(remote_fd, &size, sizeof(size)) < 0) {
-        LOGD("ERROR: write remote_fd");
+        LOGD("ERROR: write remote_fd 3");
         close(fd);
         return;
     }
-    if (sendfile(remote_fd, fd, NULL, size) < 0) {
-        LOGD("ERROR: sendfile");
-        close(fd);
-        return;
+    if (size > 0) {
+        if (sendfile(remote_fd, fd, NULL, size) < 0)
+            LOGD("ERROR: sendfile");
     }
     close(fd);
 }
