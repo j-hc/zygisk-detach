@@ -177,7 +177,7 @@ pub enum SelectNumberedResp {
 
 pub fn select_menu_numbered<L: Display, I: Iterator<Item = L> + Clone>(
     list: I,
-    quit: Option<Key>,
+    quit: Key,
     title: &str,
 ) -> io::Result<SelectNumberedResp> {
     let mut stdout = BufWriter::new(io::stdout().lock().into_raw_mode()?);
@@ -187,6 +187,7 @@ pub fn select_menu_numbered<L: Display, I: Iterator<Item = L> + Clone>(
     for (i, s) in list.enumerate() {
         write!(stdout, "{}. {}\r\n", (i + 1).green(), s)?;
     }
+    write!(stdout, "{}. Quit\r\n", 'q'.green())?;
     stdout.flush()?;
     let key = io::stdin()
         .lock()
@@ -197,7 +198,7 @@ pub fn select_menu_numbered<L: Display, I: Iterator<Item = L> + Clone>(
     write!(
         stdout,
         "\r{}{}{}",
-        cursor::Up(list_len as u16 + 1),
+        cursor::Up(list_len as u16 + 2),
         clear::AfterCursor,
         cursor::Show
     )?;
@@ -206,7 +207,7 @@ pub fn select_menu_numbered<L: Display, I: Iterator<Item = L> + Clone>(
         Key::Char(c) if c.to_digit(10).is_some_and(|c| c as usize <= list_len) => Ok(
             SelectNumberedResp::Index(c.to_digit(10).unwrap() as usize - 1),
         ),
-        k if k == Key::Ctrl('c') || quit.is_some_and(|q| q == key) => Ok(SelectNumberedResp::Quit),
+        k if k == Key::Ctrl('c') || k == quit => Ok(SelectNumberedResp::Quit),
         k => Ok(SelectNumberedResp::UndefinedKey(k)),
     }
 }

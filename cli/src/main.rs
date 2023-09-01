@@ -18,12 +18,8 @@ mod menus;
 use menus::{select_menu, select_menu_numbered, select_menu_with_input};
 
 #[cfg(target_os = "android")]
-const SDCARD_DETACH: &str = "/sdcard/detach.bin";
-#[cfg(target_os = "android")]
 const MODULE_DETACH: &str = "/data/adb/modules/zygisk-detach/detach.bin";
 
-#[cfg(target_os = "linux")]
-const SDCARD_DETACH: &str = "detach.bin";
 #[cfg(target_os = "linux")]
 const MODULE_DETACH: &str = "detach_module.txt";
 
@@ -41,11 +37,6 @@ fn main() -> ExitCode {
     }
 }
 
-fn detach_changed() -> io::Result<u64> {
-    let _ = kill_store();
-    fs::copy(SDCARD_DETACH, MODULE_DETACH)
-}
-
 fn run() -> io::Result<()> {
     print!("zygisk-detach cli by github.com/j-hc\r\n\n");
     loop {
@@ -53,13 +44,24 @@ fn run() -> io::Result<()> {
             Op::DetachSelect => detach_menu()?,
             Op::ReattachSelect => reattach_menu()?,
             Op::Reset => {
-                let d1 = fs::remove_file(SDCARD_DETACH);
-                let d2 = fs::remove_file(MODULE_DETACH);
-                if d1.is_ok() || d2.is_ok() {
+                if fs::remove_file(MODULE_DETACH).is_ok() {
                     let _ = kill_store();
                     text!("Reset");
                 } else {
                     text!("Already empty");
+                }
+            }
+            Op::CopyToSd => {
+                #[cfg(target_os = "android")]
+                const SDCARD_DETACH: &str = "/sdcard/detach.bin";
+                #[cfg(target_os = "linux")]
+                const SDCARD_DETACH: &str = "detach.bin";
+                match fs::copy(MODULE_DETACH, SDCARD_DETACH) {
+                    Ok(_) => text!("Copied"),
+                    Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                        text!("detach.bin not found");
+                    }
+                    Err(err) => return Err(err),
                 }
             }
             Op::Quit => return Ok(()),
@@ -70,7 +72,7 @@ fn run() -> io::Result<()> {
 
 fn reattach_menu() -> io::Result<()> {
     let openf = |p| fs::OpenOptions::new().write(true).read(true).open(p);
-    let Ok(mut detach_txt) = openf(SDCARD_DETACH).or_else(|_| openf(MODULE_DETACH)) else {
+    let Ok(mut detach_txt) = openf(MODULE_DETACH) else {
         text!("No detach.bin was found!");
         return Ok(());
     };
@@ -93,7 +95,7 @@ fn reattach_menu() -> io::Result<()> {
     content.drain(detached_apps[i].1.clone());
     detach_txt.set_len(0)?;
     detach_txt.write_all(&content)?;
-    detach_changed()?;
+    let _ = kill_store();
     Ok(())
 }
 
@@ -131,6 +133,7 @@ enum Op {
     DetachSelect,
     ReattachSelect,
     Reset,
+    CopyToSd,
     Quit,
     Nop,
 }
@@ -154,22 +157,21 @@ fn main_menu() -> io::Result<Op> {
         OpText::new("Select app to detach", Op::DetachSelect),
         OpText::new("Re-attach app", Op::ReattachSelect),
         OpText::new("Reset detached apps", Op::Reset),
-        OpText::new("Quit", Op::Quit),
+        OpText::new("Copy detach.bin to /sdcard", Op::CopyToSd),
     ];
-    let i = select_menu_numbered(ops.iter(), Some(Key::Char('q')), "- Selection:")?;
+    let i = select_menu_numbered(ops.iter(), Key::Char('q'), "- Selection:")?;
+    use menus::SelectNumberedResp as SN;
     match i {
-        menus::SelectNumberedResp::Index(i) => Ok(ops[i].op),
-        menus::SelectNumberedResp::UndefinedKey(Key::Char(c)) => {
+        SN::Index(i) => Ok(ops[i].op),
+        SN::UndefinedKey(Key::Char(c)) => {
             text!("Undefined key {c:?}");
             Ok(Op::Nop)
         }
-        menus::SelectNumberedResp::UndefinedKey(
-            k @ (Key::Down | Key::Up | Key::Left | Key::Right),
-        ) => {
+        SN::UndefinedKey(k @ (Key::Down | Key::Up | Key::Left | Key::Right)) => {
             text!("Undefined key {k:?}");
             Ok(Op::Nop)
         }
-        menus::SelectNumberedResp::Quit => Ok(Op::Quit),
+        SN::Quit => Ok(Op::Quit),
         _ => Ok(Op::Nop),
     }
 }
@@ -222,14 +224,14 @@ fn detach_menu() -> io::Result<()> {
             .create(true)
             .append(true)
             .read(true)
-            .open(SDCARD_DETACH)?;
+            .open(MODULE_DETACH)?;
         let mut buf: Vec<u8> = Vec::new();
         f.read_to_end(&mut buf)?;
         if !get_detached_apps(&buf).iter().any(|(s, _)| s == detach_app) {
             bin_serialize(detach_app, f)?;
             textln!("{} {}", "detach:".green(), detach_app);
             textln!("Changes are applied. No need for a reboot!");
-            detach_changed()?;
+            let _ = kill_store();
         } else {
             textln!("{} {}", "already detached:".green(), detach_app);
         }
