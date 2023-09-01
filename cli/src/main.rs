@@ -4,6 +4,7 @@ use std::fmt::Display;
 use std::fs;
 use std::io::{self, Seek};
 use std::io::{BufWriter, Read, Write};
+use std::mem::size_of;
 use std::ops::Range;
 use std::process::{Command, ExitCode};
 
@@ -100,12 +101,13 @@ fn get_detached_apps(detach_txt: &[u8]) -> Vec<(String, Range<usize>)> {
     let mut i = 0;
     let mut detached = Vec::new();
     while i < detach_txt.len() {
-        let len = u32::from_le_bytes(detach_txt[i..i + 4].try_into().unwrap()) as usize;
-        i += 4;
-        let encoded_name = &detach_txt[i..i + len];
+        let len: u8 = detach_txt[i];
+        const SZ_LEN: usize = size_of::<u8>();
+        i += SZ_LEN;
+        let encoded_name = &detach_txt[i..i + len as usize];
         let name = String::from_utf8(encoded_name.iter().step_by(2).cloned().collect()).unwrap();
-        detached.push((name, i - 4..i + len));
-        i += len;
+        detached.push((name, i - SZ_LEN..i + len as usize));
+        i += len as usize;
     }
     detached
 }
@@ -180,7 +182,11 @@ fn bin_serialize(app: &str, sink: impl Write) -> io::Result<()> {
         .cloned()
         .collect::<Vec<u8>>();
     let mut f = BufWriter::new(sink);
-    f.write_all(&(w.len() as u32).to_le_bytes())?;
+    f.write_all(std::slice::from_ref(
+        &w.len()
+            .try_into()
+            .expect("app name cannot be longer than 255"),
+    ))?;
     f.write_all(&w)?;
     f.flush()?;
     Ok(())

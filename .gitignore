@@ -1,5 +1,6 @@
 *.zip
-b.sh
 *.so
+*.sh
 test*
 magisk/system/bin/*
+fast-memmem

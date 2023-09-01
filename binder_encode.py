@@ -23,16 +23,15 @@ else:
 
 print(f"char {name}[] = {{", end='')
 len_enc = len(encoded)
+
 for i, c in enumerate(encoded):
 	if i % 15 == 0:
 		print("\n    ", end='')
 	if c == '0':
-		print(f"0x0, ", end='')
+		print(f"0x0", end='')
 	else:
-		if i == len_enc - 1:
-			print(f"'{c}'", end='')
-		else:
-			print(f"'{c}', ", end='')
+		print(f"'{c}'", end='')
+	print(",", end='')
 
 print("};")
 print(f"size_t {name}_len = {len(encoded)};")

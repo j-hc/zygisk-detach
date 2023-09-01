@@ -10,6 +10,7 @@
 #include <sys/sysmacros.h>
 #include <unistd.h>
 
+#include "parcel.hpp"
 #include "zygisk.hpp"
 
 using zygisk::Api;
@@ -21,37 +22,40 @@ using zygisk::ServerSpecializeArgs;
 int (*ioctl_orig)(int, int, char*);
 
 #define DETACH_CAP 512
-static uint8_t DETACH_TXT[DETACH_CAP] = {0};
+static unsigned char DETACH_TXT[DETACH_CAP] = {0};
 static size_t DETACH_LEN = 0;
 
-// i could parse IPackageManager onTransact too
-void handle_write(struct binder_transaction_data* btd) {
-    if (btd->data_size < 100) return;
-    uint8_t* data = (uint8_t*)btd->data.ptr.buffer;
-    size_t end_cur = btd->data_size - 1;
-    while (data[end_cur] == 0x0 || data[end_cur] == 0x40) end_cur--;
-    // load statics and copy to stack to prevent unnecessary reloads
+void handle_write(binder_transaction_data* btd) {
     size_t detach_len = DETACH_LEN;
-    uint8_t* detach_txt = DETACH_TXT;
-    uint8_t* end_ptr = data + end_cur + 1;
+    unsigned char* detach_txt = DETACH_TXT;
+
+    unsigned char* data = (unsigned char*)btd->data.ptr.buffer;
+    auto p = FakeParcel{data, 0};
+    if (!p.enforceInterface(btd->code)) return;
+
+    uint32_t pkg_len = p.readInt32();
+    uint32_t pkg_len_b = pkg_len * 2 - 1;
+    auto pkg_ptr = p.readString16(pkg_len);
+
     size_t i = 0;
     while (i < detach_len) {
-        uint32_t len = (uint32_t)detach_txt[i];
-        uint8_t* detach_ptr = detach_txt + i + sizeof(uint32_t);
-        if (!memcmp((void*)detach_ptr, end_ptr - len, len)) {
-            data[end_cur] = 0;
-            break;
+        uint8_t dlen = detach_txt[i];
+        unsigned char* dptr = detach_txt + i + sizeof(dlen);
+        i += sizeof(dlen) + dlen;
+        if (dlen != pkg_len_b) continue;
+        if (!memcmp(dptr, pkg_ptr, dlen)) {
+            *pkg_ptr = 0;
+            return;
         }
-        i += sizeof(uint32_t) + len;
     }
 }
 
 int ioctl_hook(int fd, int request, char* argp) {
     if (request == (int)BINDER_WRITE_READ) {
-        struct binder_write_read* bwr = (struct binder_write_read*)argp;
+        binder_write_read* bwr = (binder_write_read*)argp;
         if (bwr->write_size > 0) {
             uint32_t cmd = *((uint32_t*)bwr->write_buffer);
-            auto btd = (struct binder_transaction_data*)((char*)bwr->write_buffer + bwr->write_consumed + sizeof(cmd));
+            auto btd = (binder_transaction_data*)((char*)bwr->write_buffer + bwr->write_consumed + sizeof(cmd));
             switch (cmd) {
                 case BC_TRANSACTION:
                 case BC_REPLY:
