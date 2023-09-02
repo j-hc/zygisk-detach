@@ -1,7 +1,7 @@
 #![feature(iter_intersperse, print_internals)]
 
 use std::fmt::Display;
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::io::{self, Seek};
 use std::io::{BufWriter, Read, Write};
 use std::mem::size_of;
@@ -15,29 +15,77 @@ mod colorize;
 use colorize::ToColored;
 
 mod menus;
-use menus::{select_menu, select_menu_numbered, select_menu_with_input};
+use menus::{cursor_hide, cursor_show, select_menu, select_menu_numbered, select_menu_with_input};
 
 #[cfg(target_os = "android")]
 const MODULE_DETACH: &str = "/data/adb/modules/zygisk-detach/detach.bin";
+#[cfg(target_os = "android")]
+const DETACH_TXT: &str = "data/adb/modules/zygisk-detach/detach.txt";
 
 #[cfg(target_os = "linux")]
-const MODULE_DETACH: &str = "detach_module.txt";
+const MODULE_DETACH: &str = "detach.bin";
+#[cfg(target_os = "linux")]
+const DETACH_TXT: &str = "detach.txt";
 
 extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
 }
 
 fn main() -> ExitCode {
-    match run() {
+    let mut args = std::env::args().skip(1);
+    if matches!(args.next().as_deref(), Some("--serialize")) {
+        match args.next() {
+            Some(path) => {
+                if let Err(err) = serialize_txt(&path) {
+                    eprintln!("ERROR: {err}");
+                    return ExitCode::FAILURE;
+                } else {
+                    println!("Serialized detach.txt into {}", MODULE_DETACH);
+                    return ExitCode::SUCCESS;
+                }
+            }
+            None => {
+                eprintln!("detach.txt path not supplied");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+
+    let ret = match interactive() {
         Ok(_) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("\rERROR: {err}");
             ExitCode::FAILURE
         }
-    }
+    };
+    cursor_show().unwrap();
+    ret
 }
 
-fn run() -> io::Result<()> {
+fn detach_bin_changed() {
+    let _ = fs::remove_file(DETACH_TXT);
+    let _ = kill_store();
+}
+
+fn serialize_txt(path: &str) -> io::Result<()> {
+    let detach_bin = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(MODULE_DETACH)?;
+    let mut sink = BufWriter::new(detach_bin);
+    for app in std::fs::read_to_string(path)?
+        .lines()
+        .map(|s| s.trim())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+    {
+        bin_serialize(app, &mut sink)?;
+    }
+    Ok(())
+}
+
+fn interactive() -> io::Result<()> {
+    cursor_hide()?;
     print!("zygisk-detach cli by github.com/j-hc\r\n\n");
     loop {
         match main_menu()? {
@@ -55,7 +103,7 @@ fn run() -> io::Result<()> {
                 #[cfg(target_os = "android")]
                 const SDCARD_DETACH: &str = "/sdcard/detach.bin";
                 #[cfg(target_os = "linux")]
-                const SDCARD_DETACH: &str = "detach.bin";
+                const SDCARD_DETACH: &str = "detach_sdcard.bin";
                 match fs::copy(MODULE_DETACH, SDCARD_DETACH) {
                     Ok(_) => text!("Copied"),
                     Err(err) if err.kind() == io::ErrorKind::NotFound => {
@@ -71,8 +119,11 @@ fn run() -> io::Result<()> {
 }
 
 fn reattach_menu() -> io::Result<()> {
-    let openf = |p| fs::OpenOptions::new().write(true).read(true).open(p);
-    let Ok(mut detach_txt) = openf(MODULE_DETACH) else {
+    let Ok(mut detach_txt) = fs::OpenOptions::new()
+        .write(true)
+        .read(true)
+        .open(MODULE_DETACH)
+    else {
         text!("No detach.bin was found!");
         return Ok(());
     };
@@ -85,9 +136,14 @@ fn reattach_menu() -> io::Result<()> {
         text!("detach.bin is empty");
         return Ok(());
     }
-    text!("Select the app to re-attach ('q' to leave):");
     let list = detached_apps.iter().map(|e| e.0.as_str());
-    let Some(i) = select_menu(list, "✖".red(), Some(Key::Char('q')))? else {
+    let Some(i) = select_menu(
+        list,
+        "Select the app to re-attach ('q' to leave):",
+        "✖".red(),
+        Some(Key::Char('q')),
+    )?
+    else {
         return Ok(());
     };
 
@@ -95,7 +151,7 @@ fn reattach_menu() -> io::Result<()> {
     content.drain(detached_apps[i].1.clone());
     detach_txt.set_len(0)?;
     detach_txt.write_all(&content)?;
-    let _ = kill_store();
+    detach_bin_changed();
     Ok(())
 }
 
@@ -154,8 +210,8 @@ fn main_menu() -> io::Result<Op> {
         }
     }
     let ops = [
-        OpText::new("Select app to detach", Op::DetachSelect),
-        OpText::new("Re-attach app", Op::ReattachSelect),
+        OpText::new("Detach", Op::DetachSelect),
+        OpText::new("Re-attach", Op::ReattachSelect),
         OpText::new("Reset detached apps", Op::Reset),
         OpText::new("Copy detach.bin to /sdcard", Op::CopyToSd),
     ];
@@ -204,11 +260,16 @@ fn detach_menu() -> io::Result<()> {
         })
         .map(|e| std::str::from_utf8(e).expect("non utf-8 package names?"))
         .collect();
+    cursor_show()?;
     let selected = select_menu_with_input(
         |input| {
-            if input.len() > 2 {
+            let input = input.trim();
+            if !input.is_empty() {
                 apps.iter()
-                    .filter(move |app| app.contains(input.trim()))
+                    .filter(|app| {
+                        app.to_ascii_lowercase()
+                            .contains(&input.to_ascii_lowercase())
+                    })
                     .take(5)
                     .collect()
             } else {
@@ -219,6 +280,7 @@ fn detach_menu() -> io::Result<()> {
         "- app: ",
         None,
     )?;
+    cursor_hide()?;
     if let Some(detach_app) = selected {
         let mut f = fs::OpenOptions::new()
             .create(true)
@@ -231,7 +293,7 @@ fn detach_menu() -> io::Result<()> {
             bin_serialize(detach_app, f)?;
             textln!("{} {}", "detach:".green(), detach_app);
             textln!("Changes are applied. No need for a reboot!");
-            let _ = kill_store();
+            detach_bin_changed();
         } else {
             textln!("{} {}", "already detached:".green(), detach_app);
         }

@@ -27,8 +27,21 @@ macro_rules! textln {
     }};
 }
 
+pub fn cursor_hide() -> io::Result<()> {
+    let mut stdout = io::stdout().into_raw_mode()?;
+    write!(stdout, "{}", cursor::Hide)?;
+    Ok(())
+}
+
+pub fn cursor_show() -> io::Result<()> {
+    let mut stdout = io::stdout().into_raw_mode()?;
+    write!(stdout, "{}", cursor::Show)?;
+    Ok(())
+}
+
 pub fn select_menu<L: Display, I: Iterator<Item = L> + Clone>(
     list: I,
+    title: impl Display,
     prompt: impl Display,
     quit: Option<Key>,
 ) -> io::Result<Option<usize>> {
@@ -36,7 +49,7 @@ pub fn select_menu<L: Display, I: Iterator<Item = L> + Clone>(
     let mut select_idx = 0;
     let list_len = list.clone().count();
     let mut keys = io::stdin().lock().keys();
-    write!(stdout, "{}", cursor::Hide)?;
+    write!(stdout, "{}\r\n", title)?;
     let ret = loop {
         for (i, selection) in list.clone().enumerate() {
             if i == select_idx {
@@ -73,7 +86,7 @@ pub fn select_menu<L: Display, I: Iterator<Item = L> + Clone>(
             _ => {}
         }
     };
-    write!(stdout, "{}", cursor::Show)?;
+    write!(stdout, "{}{}", cursor::Up(1), clear::CurrentLine)?;
     stdout.flush()?;
     ret
 }
@@ -183,7 +196,6 @@ pub fn select_menu_numbered<L: Display, I: Iterator<Item = L> + Clone>(
     let mut stdout = BufWriter::new(io::stdout().lock().into_raw_mode()?);
     let list_len = list.clone().count();
     write!(stdout, "\r{title}\r\n")?;
-    write!(stdout, "{}", cursor::Hide)?;
     for (i, s) in list.enumerate() {
         write!(stdout, "{}. {}\r\n", (i + 1).green(), s)?;
     }
@@ -197,10 +209,9 @@ pub fn select_menu_numbered<L: Display, I: Iterator<Item = L> + Clone>(
         .expect("faulty keyboard?");
     write!(
         stdout,
-        "\r{}{}{}",
+        "\r{}{}",
         cursor::Up(list_len as u16 + 2),
         clear::AfterCursor,
-        cursor::Show
     )?;
     stdout.flush()?;
     match key {

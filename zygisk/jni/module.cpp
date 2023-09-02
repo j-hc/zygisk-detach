@@ -36,7 +36,7 @@ void handle_write(binder_transaction_data* btd) {
     unsigned char* detach_txt = DETACH_TXT;
     size_t i = 0;
     uint8_t dlen;
-    while (dlen = detach_txt[i]) {
+    while ((dlen = detach_txt[i])) {
         unsigned char* dptr = detach_txt + i + sizeof(dlen);
         i += sizeof(dlen) + dlen;
         if (dlen != pkg_len_b) continue;
