@@ -1,5 +1,13 @@
 #!/system/bin/sh
 
+[ "$MAGISK_VER_CODE" -lt 26100 ] && {
+	ui_print
+	ui_print "*******************************"
+	ui_print "This module is only supported in Magisk >= v26.1"
+	ui_print "*******************************"
+	abort
+}
+
 mv -f "$MODPATH/system/bin/detach-${ARCH}" "$MODPATH/system/bin/detach"
 rm "$MODPATH"/system/bin/detach-*
 
