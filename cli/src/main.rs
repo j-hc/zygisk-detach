@@ -20,7 +20,7 @@ use menus::{cursor_hide, cursor_show, select_menu, select_menu_numbered, select_
 #[cfg(target_os = "android")]
 const MODULE_DETACH: &str = "/data/adb/modules/zygisk-detach/detach.bin";
 #[cfg(target_os = "android")]
-const DETACH_TXT: &str = "data/adb/modules/zygisk-detach/detach.txt";
+const DETACH_TXT: &str = "/data/adb/modules/zygisk-detach/detach.txt";
 
 #[cfg(target_os = "linux")]
 const MODULE_DETACH: &str = "detach.bin";
