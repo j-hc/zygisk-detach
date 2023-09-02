@@ -23,12 +23,8 @@ int (*ioctl_orig)(int, int, char*);
 
 #define DETACH_CAP 512
 static unsigned char DETACH_TXT[DETACH_CAP] = {0};
-static size_t DETACH_LEN = 0;
 
 void handle_write(binder_transaction_data* btd) {
-    size_t detach_len = DETACH_LEN;
-    unsigned char* detach_txt = DETACH_TXT;
-
     unsigned char* data = (unsigned char*)btd->data.ptr.buffer;
     auto p = FakeParcel{data, 0};
     if (!p.enforceInterface(btd->code)) return;
@@ -37,9 +33,10 @@ void handle_write(binder_transaction_data* btd) {
     uint32_t pkg_len_b = pkg_len * 2 - 1;
     auto pkg_ptr = p.readString16(pkg_len);
 
+    unsigned char* detach_txt = DETACH_TXT;
     size_t i = 0;
-    while (i < detach_len) {
-        uint8_t dlen = detach_txt[i];
+    uint8_t dlen;
+    while (dlen = detach_txt[i]) {
         unsigned char* dptr = detach_txt + i + sizeof(dlen);
         i += sizeof(dlen) + dlen;
         if (dlen != pkg_len_b) continue;
@@ -87,9 +84,9 @@ class Sigringe : public zygisk::ModuleBase {
         api->setOption(zygisk::FORCE_DENYLIST_UNMOUNT);
 
         int fd = api->connectCompanion();
-        DETACH_LEN = this->read_companion(fd);
+        size_t detach_len = this->read_companion(fd);
         close(fd);
-        if (DETACH_LEN == 0) {
+        if (detach_len == 0) {
             api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
             return;
         }
@@ -143,8 +140,8 @@ class Sigringe : public zygisk::ModuleBase {
         if (size <= 0) {
             LOGD("ERROR: detach.bin <= 0");
             return 0;
-        } else if (size > DETACH_CAP) {
-            LOGD("ERROR: detach.bin > %d", DETACH_CAP);
+        } else if (size > DETACH_CAP - 1) {  // -1 because for the null terminator
+            LOGD("ERROR: detach.bin > %d", DETACH_CAP - 1);
             return 0;
         }
         int received = 0;
