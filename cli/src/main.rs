@@ -162,7 +162,9 @@ fn get_detached_apps(detach_txt: &[u8]) -> Vec<(String, Range<usize>)> {
         let len: u8 = detach_txt[i];
         const SZ_LEN: usize = size_of::<u8>();
         i += SZ_LEN;
-        let encoded_name = &detach_txt[i..i + len as usize];
+        let encoded_name = &detach_txt
+            .get(i..i + len as usize)
+            .expect("corrupted detach.bin");
         let name = String::from_utf8(encoded_name.iter().step_by(2).cloned().collect()).unwrap();
         detached.push((name, i - SZ_LEN..i + len as usize));
         i += len as usize;
