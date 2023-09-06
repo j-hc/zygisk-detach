@@ -28,15 +28,15 @@ char16_t* FakeParcel::readString16(uint32_t len) {
     return s;
 }
 
-bool FakeParcel::enforceInterfaceIntent() {
-    readInt32();
-    readInt32();
-    uint32_t len = readInt32();
-    readString16(len);  // pi;
-    readInt32();
-    return PM_DESCRIPTOR_LEN == len;
-    // return String16Eq(PM_DESCRIPTOR, PM_DESCRIPTOR_LEN, pi, len);
-}
+// bool FakeParcel::enforceInterfaceIntent() {
+//     readInt32();
+//     readInt32();
+//     uint32_t len = readInt32();
+//     readString16(len);  // pi;
+//     readInt32();
+//     return PM_DESCRIPTOR_LEN == len;
+//     // return String16Eq(PM_DESCRIPTOR, PM_DESCRIPTOR_LEN, pi, len);
+// }
 
 bool FakeParcel::enforceInterfaceInfo() {
     readInt32();
@@ -45,12 +45,13 @@ bool FakeParcel::enforceInterfaceInfo() {
     uint32_t len = readInt32();
     readString16(len);  // pi;
     return PM_DESCRIPTOR_LEN == len;
-    // return String16Eq(len == PM_DESCRIPTOR_LEN && !memcmp(pi, PM_DESCRIPTOR, len * sizeof(char16_t)));
+    // return String16Eq(PM_DESCRIPTOR, PM_DESCRIPTOR_LEN, pi, len);
 }
 
 bool FakeParcel::enforceInterface(uint32_t code) {
     switch (code) {
         case 3:
+        case 9:
         case 51:
         case 83:
             return enforceInterfaceInfo();

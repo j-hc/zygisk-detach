@@ -115,12 +115,11 @@ class Sigringe : public zygisk::ModuleBase {
         FILE* fp = fopen("/proc/self/maps", "r");
         if (!fp) return false;
         char mapbuf[256];
-        while (fgets(mapbuf, sizeof mapbuf, fp)) {
+        while (fgets(mapbuf, sizeof(mapbuf), fp)) {
             char flags[8];
             unsigned int dev_major, dev_minor;
             int cur;
-            sscanf(mapbuf, "%*s %s %*x %x:%x %lu%n", flags, &dev_major, &dev_minor, inode, &cur);
-            while (mapbuf[cur] != '\n') cur++;
+            sscanf(mapbuf, "%*s %s %*x %x:%x %lu %*s%n", flags, &dev_major, &dev_minor, inode, &cur);
             if (memcmp(&mapbuf[cur - 12], "libbinder.so", 12) == 0 && flags[2] == 'x') {
                 *dev = makedev(dev_major, dev_minor);
                 fclose(fp);
@@ -140,7 +139,7 @@ class Sigringe : public zygisk::ModuleBase {
         if (size <= 0) {
             LOGD("ERROR: detach.bin <= 0");
             return 0;
-        } else if (size > DETACH_CAP - 1) {  // -1 because for the null terminator
+        } else if (size > DETACH_CAP - 1) {  // -1 because of the null terminator
             LOGD("ERROR: detach.bin > %d", DETACH_CAP - 1);
             return 0;
         }

@@ -10,7 +10,7 @@ struct FakeParcel {
     void skip(size_t skip);
     uint32_t readInt32();
     char16_t* readString16(uint32_t len);
-    bool enforceInterfaceIntent();
+    // bool enforceInterfaceIntent();
     bool enforceInterfaceInfo();
     bool enforceInterface(uint32_t code);
 };

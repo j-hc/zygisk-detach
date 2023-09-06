@@ -32,6 +32,19 @@ extern "C" {
 }
 
 fn main() -> ExitCode {
+    std::panic::set_hook(Box::new(|panic| {
+        use termion::raw::IntoRawMode;
+        if let Ok(mut stderr) = io::stderr().into_raw_mode() {
+            let _ = writeln!(stderr, "\r\n{panic}\r\n");
+            let _ = writeln!(stderr, "This should not have happened.\r");
+            let _ = writeln!(
+                stderr,
+                "Report at https://github.com/j-hc/zygisk-detach/issues\r"
+            );
+            let _ = write!(stderr, "{}", cursor::Show);
+        }
+    }));
+
     let mut args = std::env::args().skip(1);
     if matches!(args.next().as_deref(), Some("--serialize")) {
         match args.next() {
@@ -52,7 +65,7 @@ fn main() -> ExitCode {
     }
 
     let ret = match interactive() {
-        Ok(_) => ExitCode::SUCCESS,
+        Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("\rERROR: {err}");
             ExitCode::FAILURE
@@ -162,9 +175,11 @@ fn get_detached_apps(detach_txt: &[u8]) -> Vec<(String, Range<usize>)> {
         let len: u8 = detach_txt[i];
         const SZ_LEN: usize = size_of::<u8>();
         i += SZ_LEN;
-        let encoded_name = &detach_txt
-            .get(i..i + len as usize)
-            .expect("corrupted detach.bin");
+        let Some(encoded_name) = &detach_txt.get(i..i + len as usize) else {
+            eprintln!("Corrupted detach.bin. Reset and try again.");
+            let _ = cursor_show();
+            std::process::exit(1);
+        };
         let name = String::from_utf8(encoded_name.iter().step_by(2).cloned().collect()).unwrap();
         detached.push((name, i - SZ_LEN..i + len as usize));
         i += len as usize;
