@@ -1,11 +1,13 @@
 #![feature(iter_intersperse, print_internals)]
 
-use std::fmt::Display;
+use std::error::Error;
+use std::fmt::{Debug, Display};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Seek};
 use std::io::{BufWriter, Read, Write};
 use std::mem::size_of;
 use std::ops::Range;
+use std::panic::Location;
 use std::process::{Command, ExitCode};
 
 use termion::event::Key;
@@ -30,6 +32,33 @@ const DETACH_TXT: &str = "detach.txt";
 extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
 }
+
+struct CLIErr<E: Error> {
+    source: E,
+    loc: &'static Location<'static>,
+}
+impl<E: Error> Error for CLIErr<E> {}
+impl<E: Error> Debug for CLIErr<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{}\nat {}", self.source, self.loc)
+    }
+}
+impl<E: Error> Display for CLIErr<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(self, f)
+    }
+}
+impl From<io::Error> for CLIErr<io::Error> {
+    #[track_caller]
+    fn from(err: io::Error) -> Self {
+        Self {
+            source: err,
+            loc: Location::caller(),
+        }
+    }
+}
+
+type IOError<T> = Result<T, CLIErr<io::Error>>;
 
 fn main() -> ExitCode {
     std::panic::set_hook(Box::new(|panic| {
@@ -80,7 +109,7 @@ fn detach_bin_changed() {
     let _ = kill_store();
 }
 
-fn serialize_txt(path: &str) -> io::Result<()> {
+fn serialize_txt(path: &str) -> IOError<()> {
     let detach_bin = OpenOptions::new()
         .create(true)
         .truncate(true)
@@ -97,7 +126,7 @@ fn serialize_txt(path: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn interactive() -> io::Result<()> {
+fn interactive() -> IOError<()> {
     cursor_hide()?;
     print!("zygisk-detach cli by github.com/j-hc\r\n\n");
     loop {
@@ -122,7 +151,7 @@ fn interactive() -> io::Result<()> {
                     Err(err) if err.kind() == io::ErrorKind::NotFound => {
                         text!("detach.bin not found");
                     }
-                    Err(err) => return Err(err),
+                    Err(err) => return Err(err.into()),
                 }
             }
             Op::Quit => return Ok(()),
@@ -131,14 +160,18 @@ fn interactive() -> io::Result<()> {
     }
 }
 
-fn reattach_menu() -> io::Result<()> {
-    let Ok(mut detach_txt) = fs::OpenOptions::new()
+fn reattach_menu() -> IOError<()> {
+    let mut detach_txt = match fs::OpenOptions::new()
         .write(true)
         .read(true)
         .open(MODULE_DETACH)
-    else {
-        text!("No detach.bin was found!");
-        return Ok(());
+    {
+        Ok(v) => v,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            text!("detach.bin not found");
+            return Ok(());
+        }
+        Err(e) => return Err(e.into()),
     };
     let mut content = Vec::new();
     detach_txt.read_to_end(&mut content)?;
@@ -188,12 +221,12 @@ fn get_detached_apps(detach_txt: &[u8]) -> Vec<(String, Range<usize>)> {
 }
 
 #[cfg(target_os = "linux")]
-fn get_installed_apps() -> io::Result<Vec<u8>> {
+fn get_installed_apps() -> IOError<Vec<u8>> {
     Ok("package:com.app1\npackage:org.xxx2".as_bytes().to_vec())
 }
 
 #[cfg(target_os = "android")]
-fn get_installed_apps() -> io::Result<Vec<u8>> {
+fn get_installed_apps() -> IOError<Vec<u8>> {
     Ok(Command::new("pm")
         .args(["list", "packages"])
         .stdout(std::process::Stdio::piped())
@@ -211,7 +244,7 @@ enum Op {
     Nop,
 }
 
-fn main_menu() -> io::Result<Op> {
+fn main_menu() -> IOError<Op> {
     struct OpText {
         desc: &'static str,
         op: Op,
@@ -249,7 +282,7 @@ fn main_menu() -> io::Result<Op> {
     }
 }
 
-fn bin_serialize(app: &str, sink: impl Write) -> io::Result<()> {
+fn bin_serialize(app: &str, sink: impl Write) -> IOError<()> {
     let w = app
         .as_bytes()
         .iter()
@@ -267,7 +300,7 @@ fn bin_serialize(app: &str, sink: impl Write) -> io::Result<()> {
     Ok(())
 }
 
-fn detach_menu() -> io::Result<()> {
+fn detach_menu() -> IOError<()> {
     let installed_apps = get_installed_apps()?;
     let apps: Vec<&str> = installed_apps[..installed_apps.len() - 1]
         .split(|&e| e == b'\n')
@@ -318,7 +351,7 @@ fn detach_menu() -> io::Result<()> {
     Ok(())
 }
 
-fn _kill_store_am() -> io::Result<()> {
+fn _kill_store_am() -> IOError<()> {
     Command::new("am")
         .args(["force-stop", "com.android.vending"])
         .spawn()?
@@ -326,7 +359,7 @@ fn _kill_store_am() -> io::Result<()> {
     Ok(())
 }
 
-fn kill_store() -> io::Result<()> {
+fn kill_store() -> IOError<()> {
     const PKG: &str = "com.android.vending";
     let mut buf = [0u8; PKG.len()];
     for proc in fs::read_dir("/proc")? {
