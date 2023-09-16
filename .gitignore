@@ -4,3 +4,4 @@ b.sh
 test*
 magisk/system/bin/*
 fast-memmem
+*.log

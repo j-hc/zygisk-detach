@@ -1,13 +1,11 @@
 #include <android/log.h>
-#include <asm-generic/ioctl.h>
 #include <fcntl.h>
-#include <inttypes.h>
-#include <linux/android/binder.h>
-#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/sendfile.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
+#include <sys/system_properties.h>
 #include <unistd.h>
 
 #include "parcel.hpp"
@@ -19,16 +17,13 @@ using zygisk::ServerSpecializeArgs;
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "zygisk-detach", __VA_ARGS__)
 
-int (*ioctl_orig)(int, int, char*);
-
 #define DETACH_CAP 512
 static unsigned char DETACH_TXT[DETACH_CAP] = {0};
+static uint8_t HEADERS_COUNT;
 
-void handle_write(binder_transaction_data* btd) {
-    unsigned char* data = (unsigned char*)btd->data.ptr.buffer;
+void handle_transact(uint8_t* data, size_t data_size) {
     auto p = FakeParcel{data, 0};
-    if (!p.enforceInterface(btd->code)) return;
-
+    if (!p.enforceInterface(data_size, HEADERS_COUNT)) return;
     uint32_t pkg_len = p.readInt32();
     uint32_t pkg_len_b = pkg_len * 2 - 1;
     auto pkg_ptr = p.readString16(pkg_len);
@@ -47,23 +42,18 @@ void handle_write(binder_transaction_data* btd) {
     }
 }
 
-int ioctl_hook(int fd, int request, char* argp) {
-    if (request == (int)BINDER_WRITE_READ) {
-        binder_write_read* bwr = (binder_write_read*)argp;
-        if (bwr->write_size > 0) {
-            uint32_t cmd = *((uint32_t*)bwr->write_buffer);
-            auto btd = (binder_transaction_data*)((char*)bwr->write_buffer + bwr->write_consumed + sizeof(cmd));
-            switch (cmd) {
-                case BC_TRANSACTION:
-                case BC_REPLY:
-                    handle_write(btd);
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
-    return ioctl_orig(fd, request, argp);
+int (*transact_orig)(void*, int32_t, uint32_t, void*, void*, uint32_t);
+
+struct PParcel {
+    size_t error;
+    uint8_t* data;
+    size_t data_size;
+};
+
+int transact_hook(void* self, int32_t handle, uint32_t code, void* pdata, void* preply, uint32_t flags) {
+    auto parcel = (PParcel*)pdata;
+    handle_transact(parcel->data, parcel->data_size);
+    return transact_orig(self, handle, code, pdata, preply, flags);
 }
 
 class Sigringe : public zygisk::ModuleBase {
@@ -75,7 +65,7 @@ class Sigringe : public zygisk::ModuleBase {
 
     void preAppSpecialize(AppSpecializeArgs* args) override {
         const char* process = env->GetStringUTFChars(args->nice_name, nullptr);
-        if (strcmp(process, "com.android.vending") && strcmp(process, "com.android.vending:background")) {
+        if (memcmp(process, "com.android.vending", 19)) {
             env->ReleaseStringUTFChars(args->nice_name, process);
             api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
             return;
@@ -90,11 +80,21 @@ class Sigringe : public zygisk::ModuleBase {
             api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
             return;
         }
+        char sdk_str[8];
+        if (__system_property_get("ro.build.version.sdk", sdk_str)) {
+            if (atoi(sdk_str) >= 30)
+                HEADERS_COUNT = 3;
+            else
+                HEADERS_COUNT = 1;
+        } else {
+            HEADERS_COUNT = 3;
+        }
 
         ino_t inode;
         dev_t dev;
         if (getBinder(&inode, &dev)) {
-            this->api->pltHookRegister(dev, inode, "ioctl", (void**)&ioctl_hook, (void**)&ioctl_orig);
+            this->api->pltHookRegister(dev, inode, "_ZN7android14IPCThreadState8transactEijRKNS_6ParcelEPS1_j",
+                                       (void**)&transact_hook, (void**)&transact_orig);
             if (this->api->pltHookCommit()) {
                 // LOGD("Loaded!");
             } else {
