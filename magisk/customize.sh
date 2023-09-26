@@ -11,13 +11,8 @@ fi
 
 if [ -f "$MODPATH/detach.txt" ]; then
 	ui_print "- detach.txt inside module! Generating detach.bin"
-	APPS=$(tr -d ' \t\r' <"$MODPATH/detach.txt" | grep -v '^$')
-	for app in $APPS; do
-		ui_print "   $app"
-	done
-	if ! OP=$("$MODPATH"/system/bin/detach --serialize "$MODPATH/detach.txt" 2>&1); then
-		ui_print "$OP"
-	fi
+	OP=$("$MODPATH"/system/bin/detach --serialize "$MODPATH/detach.txt" "$MODPATH/detach.bin" 2>&1)
+	ui_print "$OP"
 fi
 
 ALIAS="alias detach='su -c detach'"

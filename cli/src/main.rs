@@ -59,7 +59,7 @@ impl From<io::Error> for CLIErr<io::Error> {
     }
 }
 
-type IOError<T> = Result<T, CLIErr<io::Error>>;
+type IOResult<T> = Result<T, CLIErr<io::Error>>;
 
 fn main() -> ExitCode {
     std::panic::set_hook(Box::new(|panic| {
@@ -77,20 +77,21 @@ fn main() -> ExitCode {
 
     let mut args = std::env::args().skip(1);
     if matches!(args.next().as_deref(), Some("--serialize")) {
-        match args.next() {
-            Some(path) => {
-                if let Err(err) = serialize_txt(&path) {
-                    eprintln!("ERROR: {err}");
-                    return ExitCode::FAILURE;
-                } else {
-                    println!("Serialized detach.txt into {}", MODULE_DETACH);
-                    return ExitCode::SUCCESS;
-                }
-            }
-            None => {
-                eprintln!("detach.txt path not supplied");
-                return ExitCode::FAILURE;
-            }
+        let Some(dtxt) = args.next() else {
+            eprintln!("detach.txt path not supplied.");
+            return ExitCode::FAILURE;
+        };
+        let Some(dbin) = args.next() else {
+            eprintln!("detach.bin path not supplied.");
+            return ExitCode::FAILURE;
+        };
+
+        if let Err(err) = serialize_txt(&dtxt, &dbin) {
+            eprintln!("ERROR: {err}");
+            return ExitCode::FAILURE;
+        } else {
+            println!("Serialized detach.txt");
+            return ExitCode::SUCCESS;
         }
     }
 
@@ -110,24 +111,25 @@ fn detach_bin_changed() {
     let _ = kill_store();
 }
 
-fn serialize_txt(path: &str) -> IOError<()> {
+fn serialize_txt(txt: &str, bin: &str) -> IOResult<()> {
     let detach_bin = OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
-        .open(MODULE_DETACH)?;
+        .open(bin)?;
     let mut sink = BufWriter::new(detach_bin);
-    for app in std::fs::read_to_string(path)?
+    for app in std::fs::read_to_string(txt)?
         .lines()
         .map(|s| s.trim())
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
     {
+        println!("  '{}'", app);
         bin_serialize(app, &mut sink)?;
     }
     Ok(())
 }
 
-fn interactive(menus: &mut Menus) -> IOError<()> {
+fn interactive(menus: &mut Menus) -> IOResult<()> {
     menus.cursor_hide()?;
     print!("zygisk-detach cli by github.com/j-hc\r\n\n");
     loop {
@@ -161,7 +163,7 @@ fn interactive(menus: &mut Menus) -> IOError<()> {
     }
 }
 
-fn reattach_menu(menus: &mut Menus) -> IOError<()> {
+fn reattach_menu(menus: &mut Menus) -> IOResult<()> {
     let mut detach_txt = match fs::OpenOptions::new()
         .write(true)
         .read(true)
@@ -222,12 +224,12 @@ fn get_detached_apps(menus: &mut Menus, detach_txt: &[u8]) -> Vec<(String, Range
 }
 
 #[cfg(target_os = "linux")]
-fn get_installed_apps() -> IOError<Vec<u8>> {
+fn get_installed_apps() -> IOResult<Vec<u8>> {
     Ok("package:com.app1\npackage:org.xxx2".as_bytes().to_vec())
 }
 
 #[cfg(target_os = "android")]
-fn get_installed_apps() -> IOError<Vec<u8>> {
+fn get_installed_apps() -> IOResult<Vec<u8>> {
     Ok(Command::new("pm")
         .args(["list", "packages"])
         .stdout(std::process::Stdio::piped())
@@ -245,7 +247,7 @@ enum Op {
     Nop,
 }
 
-fn main_menu(menus: &mut Menus) -> IOError<Op> {
+fn main_menu(menus: &mut Menus) -> IOResult<Op> {
     struct OpText {
         desc: &'static str,
         op: Op,
@@ -283,7 +285,7 @@ fn main_menu(menus: &mut Menus) -> IOError<Op> {
     }
 }
 
-fn bin_serialize(app: &str, sink: impl Write) -> IOError<()> {
+fn bin_serialize(app: &str, sink: impl Write) -> IOResult<()> {
     let w = app
         .as_bytes()
         .iter()
@@ -301,7 +303,7 @@ fn bin_serialize(app: &str, sink: impl Write) -> IOError<()> {
     Ok(())
 }
 
-fn detach_menu(menus: &mut Menus) -> IOError<()> {
+fn detach_menu(menus: &mut Menus) -> IOResult<()> {
     let installed_apps = get_installed_apps()?;
     let apps: Vec<&str> = installed_apps[..installed_apps.len() - 1]
         .split(|&e| e == b'\n')
@@ -355,7 +357,7 @@ fn detach_menu(menus: &mut Menus) -> IOError<()> {
     Ok(())
 }
 
-fn _kill_store_am() -> IOError<()> {
+fn _kill_store_am() -> IOResult<()> {
     Command::new("am")
         .args(["force-stop", "com.android.vending"])
         .spawn()?
@@ -363,7 +365,7 @@ fn _kill_store_am() -> IOError<()> {
     Ok(())
 }
 
-fn kill_store() -> IOError<()> {
+fn kill_store() -> IOResult<()> {
     const PKG: &str = "com.android.vending";
     let mut buf = [0u8; PKG.len()];
     for proc in fs::read_dir("/proc")? {
