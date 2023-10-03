@@ -41,7 +41,7 @@ struct CLIErr<E: Error> {
 impl<E: Error> Error for CLIErr<E> {}
 impl<E: Error> Debug for CLIErr<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}\nat {}", self.source, self.loc)
+        write!(f, "{}\r\nat {}", self.source, self.loc)
     }
 }
 impl<E: Error> Display for CLIErr<E> {
@@ -63,14 +63,14 @@ type IOResult<T> = Result<T, CLIErr<io::Error>>;
 
 fn main() -> ExitCode {
     std::panic::set_hook(Box::new(|panic| {
-        if let Ok(mut stderr) = io::stderr().into_raw_mode() {
-            let _ = writeln!(stderr, "\r\n{panic}\r\n");
-            let _ = writeln!(stderr, "This should not have happened.\r");
+        if let Ok(mut stdout) = io::stdout().into_raw_mode() {
+            let _ = writeln!(stdout, "\r\n{panic}\r\n");
+            let _ = writeln!(stdout, "This should not have happened.\r");
             let _ = writeln!(
-                stderr,
+                stdout,
                 "Report at https://github.com/j-hc/zygisk-detach/issues\r"
             );
-            let _ = write!(stderr, "{}", cursor::Show);
+            let _ = write!(stdout, "{}", cursor::Show);
         }
     }));
     let mut menus = Menus::new();

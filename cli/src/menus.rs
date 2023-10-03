@@ -1,7 +1,6 @@
 use crate::colorize::ToColored;
 use std::fmt::Display;
-use std::io::Write;
-use std::io::{self, BufWriter, Stdout};
+use std::io::{self, BufWriter, StdoutLock, Write};
 use termion::input::TermRead;
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::{clear, cursor, event::Key};
@@ -34,12 +33,12 @@ pub enum SelectNumberedResp {
     Quit,
 }
 pub struct Menus {
-    pub(crate) stdout: BufWriter<RawTerminal<Stdout>>,
+    pub(crate) stdout: BufWriter<RawTerminal<StdoutLock<'static>>>,
 }
 impl Menus {
     pub fn new() -> Self {
         Self {
-            stdout: BufWriter::new(io::stdout().into_raw_mode().unwrap()),
+            stdout: BufWriter::new(io::stdout().lock().into_raw_mode().unwrap()),
         }
     }
 
