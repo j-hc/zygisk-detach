@@ -28,11 +28,10 @@ void handle_transact(uint8_t* data, size_t data_size) {
     uint32_t pkg_len_b = pkg_len * 2 - 1;
     auto pkg_ptr = p.readString16(pkg_len);
 
-    unsigned char* detach_txt = DETACH_TXT;
     size_t i = 0;
     uint8_t dlen;
-    while ((dlen = detach_txt[i])) {
-        unsigned char* dptr = detach_txt + i + sizeof(dlen);
+    while ((dlen = DETACH_TXT[i])) {
+        unsigned char* dptr = DETACH_TXT + i + sizeof(dlen);
         i += sizeof(dlen) + dlen;
         if (dlen != pkg_len_b) continue;
         if (!memcmp(dptr, pkg_ptr, dlen)) {
@@ -80,13 +79,14 @@ class Sigringe : public zygisk::ModuleBase {
             api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
             return;
         }
-        char sdk_str[8];
+        char sdk_str[2];
         if (__system_property_get("ro.build.version.sdk", sdk_str)) {
-            if (atoi(sdk_str) >= 30)
-                HEADERS_COUNT = 3;
-            else
-                HEADERS_COUNT = 1;
+            int sdk = atoi(sdk_str);
+            if (sdk >= 30) HEADERS_COUNT = 3;
+            else if (sdk == 29) HEADERS_COUNT = 2;
+            else HEADERS_COUNT = 1;
         } else {
+            LOGD("WARN: could not get sdk version (fallback=3)");
             HEADERS_COUNT = 3;
         }
 
