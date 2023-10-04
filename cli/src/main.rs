@@ -73,7 +73,6 @@ fn main() -> ExitCode {
             let _ = write!(stdout, "{}", cursor::Show);
         }
     }));
-    let mut menus = Menus::new();
 
     let mut args = std::env::args().skip(1);
     if matches!(args.next().as_deref(), Some("--serialize")) {
@@ -95,6 +94,7 @@ fn main() -> ExitCode {
         }
     }
 
+    let mut menus = Menus::new();
     let ret = match interactive(&mut menus) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
