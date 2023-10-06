@@ -93,7 +93,10 @@ fn main() -> ExitCode {
             return ExitCode::SUCCESS;
         }
     }
-
+    #[cfg(target_os = "android")]
+    if let Ok(true) = check_denylist() {
+        eprintln!("Stop putting Play Store in denylist!");
+    }
     let mut menus = Menus::new();
     let ret = match interactive(&mut menus) {
         Ok(()) => ExitCode::SUCCESS,
@@ -104,6 +107,24 @@ fn main() -> ExitCode {
     };
     menus.cursor_show().unwrap();
     ret
+}
+
+fn check_denylist() -> io::Result<bool> {
+    let op = Command::new("magisk")
+        .args(["--denylist", "ls"])
+        .stdout(std::process::Stdio::piped())
+        .output()?
+        .stdout;
+    let op = String::from_utf8_lossy(&op);
+    if op.contains("com.android.vending") {
+        Command::new("magisk")
+            .args(["--denylist", "rm", "com.android.vending"])
+            .spawn()?
+            .wait()?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 fn detach_bin_changed() {
