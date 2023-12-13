@@ -1,8 +1,10 @@
 use crate::colorize::ToColored;
 use std::fmt::Display;
 use std::io::{self, BufWriter, StdoutLock, Write};
+use termion::cursor::DetectCursorPos;
 use termion::input::TermRead;
 use termion::raw::{IntoRawMode, RawTerminal};
+use termion::terminal_size;
 use termion::{clear, cursor, event::Key};
 
 #[macro_export]
@@ -37,6 +39,11 @@ pub struct Menus {
 }
 impl Menus {
     pub fn new() -> Self {
+        let (r, c) = terminal_size().unwrap();
+        if r < 46 || c < 29 {
+            eprintln!("Terminal screen too small");
+            std::process::exit(1);
+        }
         Self {
             stdout: BufWriter::new(io::stdout().lock().into_raw_mode().unwrap()),
         }
@@ -62,6 +69,8 @@ impl Menus {
         let mut select_idx = 0;
         let list_len = list.clone().count();
         let mut keys = io::stdin().lock().keys();
+        let pos = self.stdout.cursor_pos().unwrap();
+
         write!(self.stdout, "{}\r\n", title)?;
         let ret = loop {
             for (i, selection) in list.clone().enumerate() {
@@ -85,7 +94,7 @@ impl Menus {
             write!(
                 self.stdout,
                 "\r{}{}",
-                cursor::Up(list_len as u16),
+                cursor::Goto(pos.0, pos.1),
                 clear::AfterCursor
             )?;
             match key {
@@ -119,6 +128,7 @@ impl Menus {
         let mut select_idx = 0;
         let mut cursor = 0;
         let mut input = String::new();
+        let pos = self.stdout.cursor_pos().unwrap();
 
         let mut keys = io::stdin().lock().keys();
         let ret = loop {
@@ -151,7 +161,7 @@ impl Menus {
                 }
             }
             if list_len > 0 {
-                write!(self.stdout, "{}", cursor::Up(list_len as u16 + 4))?;
+                write!(self.stdout, "{}", cursor::Goto(pos.0, pos.1))?;
             }
             write!(
                 self.stdout,
@@ -224,6 +234,8 @@ impl Menus {
         title: &str,
     ) -> io::Result<SelectNumberedResp> {
         let list_len = list.clone().count();
+        let pos = self.stdout.cursor_pos().unwrap();
+
         write!(self.stdout, "\r{title}\r\n")?;
         for (i, s) in list.enumerate() {
             write!(self.stdout, "{}. {}\r\n", (i + 1).green(), s)?;
@@ -239,7 +251,7 @@ impl Menus {
         write!(
             self.stdout,
             "\r{}{}",
-            cursor::Up(list_len as u16 + 2),
+            cursor::Goto(pos.0, pos.1),
             clear::AfterCursor,
         )?;
         self.stdout.flush()?;
