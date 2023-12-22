@@ -242,7 +242,7 @@ fn get_detached_apps(menus: &mut Menus, detach_txt: &[u8]) -> Vec<(String, Range
 
 #[cfg(target_os = "linux")]
 fn get_installed_apps() -> IOResult<Vec<u8>> {
-    Ok("package:com.app1\npackage:org.xxx2".as_bytes().to_vec())
+    Ok("package:com.app1\npackage:org.xxx2\ncom.apppppppp.tooolonnggggtooolonnggggtooolonnggggtooolonngggg".as_bytes().to_vec())
 }
 
 #[cfg(target_os = "android")]
@@ -315,11 +315,10 @@ fn bin_serialize(app: &str, f: &mut File) -> IOResult<()> {
         std::process::exit(1);
     }
     let mut f = BufWriter::new(f);
-    f.write_all(std::slice::from_ref(
-        &w.len()
-            .try_into()
-            .expect("app name cannot be longer than 255"),
-    ))?;
+    f.write(&[w
+        .len()
+        .try_into()
+        .expect("app name cannot be longer than 255")])?;
     f.write_all(&w)?;
     f.flush()?;
     Ok(())

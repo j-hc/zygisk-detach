@@ -17,7 +17,7 @@ using zygisk::ServerSpecializeArgs;
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "zygisk-detach", __VA_ARGS__)
 
-#define DETACH_CAP 512
+#define DETACH_CAP 1024
 static unsigned char DETACH_TXT[DETACH_CAP] = {0};
 static uint8_t HEADERS_COUNT;
 
