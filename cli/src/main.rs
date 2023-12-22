@@ -1,8 +1,6 @@
-#![feature(iter_intersperse, print_internals)]
-
 use std::error::Error;
 use std::fmt::{Debug, Display};
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Seek};
 use std::io::{BufWriter, Read, Write};
 use std::mem::size_of;
@@ -34,22 +32,22 @@ extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
 }
 
-struct CLIErr<E: Error> {
+struct LocErr<E: Error> {
     source: E,
     loc: &'static Location<'static>,
 }
-impl<E: Error> Error for CLIErr<E> {}
-impl<E: Error> Debug for CLIErr<E> {
+impl<E: Error> Error for LocErr<E> {}
+impl<E: Error> Debug for LocErr<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}\r\nat {}", self.source, self.loc)
     }
 }
-impl<E: Error> Display for CLIErr<E> {
+impl<E: Error> Display for LocErr<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(self, f)
     }
 }
-impl From<io::Error> for CLIErr<io::Error> {
+impl From<io::Error> for LocErr<io::Error> {
     #[track_caller]
     fn from(err: io::Error) -> Self {
         Self {
@@ -58,8 +56,7 @@ impl From<io::Error> for CLIErr<io::Error> {
         }
     }
 }
-
-type IOResult<T> = Result<T, CLIErr<io::Error>>;
+type IOResult<T> = Result<T, LocErr<io::Error>>;
 
 fn main() -> ExitCode {
     std::panic::set_hook(Box::new(|panic| {
@@ -133,19 +130,18 @@ fn detach_bin_changed() {
 }
 
 fn serialize_txt(txt: &str, bin: &str) -> IOResult<()> {
-    let detach_bin = OpenOptions::new()
+    let mut detach_bin = OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
         .open(bin)?;
-    let mut sink = BufWriter::new(detach_bin);
     for app in std::fs::read_to_string(txt)?
         .lines()
         .map(|s| s.trim())
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
     {
         println!("  '{}'", app);
-        bin_serialize(app, &mut sink)?;
+        bin_serialize(app, &mut detach_bin)?;
     }
     Ok(())
 }
@@ -306,14 +302,19 @@ fn main_menu(menus: &mut Menus) -> IOResult<Op> {
     }
 }
 
-fn bin_serialize(app: &str, sink: impl Write) -> IOResult<()> {
-    let w = app
-        .as_bytes()
-        .iter()
-        .intersperse(&0)
-        .cloned()
-        .collect::<Vec<u8>>();
-    let mut f = BufWriter::new(sink);
+fn bin_serialize(app: &str, f: &mut File) -> IOResult<()> {
+    const DETACH_CAP: u64 = 1024;
+    let mut w = Vec::with_capacity(2 * app.as_bytes().len() - 1);
+    for b in app.as_bytes()[..app.len() - 1].iter().cloned() {
+        w.push(b);
+        w.push(0);
+    }
+    w.push(app.as_bytes()[app.len() - 1]);
+    if f.metadata()?.len() + w.len() as u64 > DETACH_CAP {
+        eprintln!("detach.bin cannot be larger than {DETACH_CAP}b\r");
+        std::process::exit(1);
+    }
+    let mut f = BufWriter::new(f);
     f.write_all(std::slice::from_ref(
         &w.len()
             .try_into()
@@ -367,7 +368,7 @@ fn detach_menu(menus: &mut Menus) -> IOResult<()> {
             .iter()
             .any(|(s, _)| s == detach_app)
         {
-            bin_serialize(detach_app, f)?;
+            bin_serialize(detach_app, &mut f)?;
             textln!(menus, "{} {}", "detach:".green(), detach_app);
             textln!(menus, "Changes are applied. No need for a reboot!");
             detach_bin_changed();
