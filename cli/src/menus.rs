@@ -4,7 +4,6 @@ use std::io::{self, BufWriter, StdoutLock, Write};
 use termion::cursor::DetectCursorPos;
 use termion::input::TermRead;
 use termion::raw::{IntoRawMode, RawTerminal};
-use termion::terminal_size;
 use termion::{clear, cursor, event::Key};
 
 #[macro_export]
@@ -39,11 +38,6 @@ pub struct Menus {
 }
 impl Menus {
     pub fn new() -> Self {
-        let (r, c) = terminal_size().unwrap();
-        if r < 46 || c < 29 {
-            eprintln!("Terminal screen too small");
-            std::process::exit(1);
-        }
         Self {
             stdout: BufWriter::new(io::stdout().lock().into_raw_mode().unwrap()),
         }
