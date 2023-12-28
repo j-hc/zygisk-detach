@@ -63,9 +63,9 @@ impl Menus {
         let mut select_idx = 0;
         let list_len = list.clone().count();
         let mut keys = io::stdin().lock().keys();
-        let pos = self.stdout.cursor_pos().unwrap();
-
+        
         write!(self.stdout, "{}\r\n", title)?;
+        let pos = self.stdout.cursor_pos().unwrap();
         let ret = loop {
             for (i, selection) in list.clone().enumerate() {
                 if i == select_idx {

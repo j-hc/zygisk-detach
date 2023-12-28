@@ -1,5 +1,9 @@
 #!/system/bin/sh
 
+if [ -n "$KSU_VER" ] && [ ! -d "$NVBASE/modules/zygisksu" ]; then
+	abort "You do not have ZygiskNext installed. Bye."
+fi
+
 mv -f "$MODPATH/system/bin/detach-${ARCH}" "$MODPATH/system/bin/detach"
 rm "$MODPATH"/system/bin/detach-*
 
@@ -17,7 +21,8 @@ fi
 
 ALIAS="alias detach='su -c detach'"
 BASHRC="/data/data/com.termux/files/home/.bashrc"
-if grep -qxF "$ALIAS" "$BASHRC" || echo "$ALIAS" >>"$BASHRC"; then
+if [ -f "$BASHRC" ]; then
+	grep -qxF "$ALIAS" "$BASHRC" || echo "$ALIAS" >>"$BASHRC"
 	ui_print "- Run 'detach' in termux after the reboot"
 else
 	ui_print "- Run 'su -c detach' in terminal after the reboot"
