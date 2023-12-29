@@ -96,7 +96,7 @@ class Sigringe : public zygisk::ModuleBase {
             this->api->pltHookRegister(dev, inode, "_ZN7android14IPCThreadState8transactEijRKNS_6ParcelEPS1_j",
                                        (void**)&transact_hook, (void**)&transact_orig);
             if (this->api->pltHookCommit()) {
-                // LOGD("Loaded!");
+                LOGD("Loaded!");
             } else {
                 LOGD("ERROR: pltHookCommit");
                 api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);

@@ -21,7 +21,7 @@ fi
 
 ALIAS="alias detach='su -c detach'"
 BASHRC="/data/data/com.termux/files/home/.bashrc"
-if [ -f "$BASHRC" ]; then
+if [ -d "/data/data/com.termux/files/home/" ]; then
 	grep -qxF "$ALIAS" "$BASHRC" || echo "$ALIAS" >>"$BASHRC"
 	ui_print "- Run 'detach' in termux after the reboot"
 else
