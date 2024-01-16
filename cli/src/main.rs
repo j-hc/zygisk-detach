@@ -10,7 +10,7 @@ use std::process::{Command, ExitCode};
 use termion::raw::IntoRawMode;
 
 use termion::event::Key;
-use termion::{clear, cursor};
+use termion::{clear, cursor, terminal_size};
 
 mod colorize;
 use colorize::ToColored;
@@ -335,6 +335,7 @@ fn detach_menu(menus: &mut Menus) -> IOResult<()> {
         .map(|e| std::str::from_utf8(e).expect("non utf-8 package names?"))
         .collect();
     menus.cursor_show()?;
+    let col = terminal_size().expect("could not get terminal size").0 as usize - 2;
     let selected = menus.select_menu_with_input(
         |input| {
             let input = input.trim();
@@ -345,6 +346,7 @@ fn detach_menu(menus: &mut Menus) -> IOResult<()> {
                             .contains(&input.to_ascii_lowercase())
                     })
                     .take(5)
+                    .map(|s| &s[..col.min(s.bytes().len())])
                     .collect()
             } else {
                 Vec::new()

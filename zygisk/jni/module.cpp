@@ -64,7 +64,7 @@ class Sigringe : public zygisk::ModuleBase {
 
     void preAppSpecialize(AppSpecializeArgs* args) override {
         const char* process = env->GetStringUTFChars(args->nice_name, nullptr);
-        if (memcmp(process, "com.android.vending", 19)) {
+        if (memcmp(process, "com.android.vending\0", 20)) {
             env->ReleaseStringUTFChars(args->nice_name, process);
             api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
             return;
