@@ -21,7 +21,7 @@ using zygisk::ServerSpecializeArgs;
 static unsigned char DETACH_TXT[DETACH_CAP] = {0};
 static uint8_t HEADERS_COUNT;
 
-void handle_transact(uint8_t* data, size_t data_size) {
+static inline void handle_transact(uint8_t* data, size_t data_size) {
     auto p = FakeParcel{data, 0};
     if (!p.enforceInterface(data_size, HEADERS_COUNT)) return;
     uint32_t pkg_len = p.readInt32();
