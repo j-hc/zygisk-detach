@@ -1,7 +1,6 @@
 use crate::colorize::ToColored;
 use std::fmt::Display;
 use std::io::{self, BufWriter, StdoutLock, Write};
-use termion::cursor::DetectCursorPos;
 use termion::input::TermRead;
 use termion::raw::{IntoRawMode, RawTerminal};
 use termion::{clear, cursor, event::Key};
@@ -63,9 +62,7 @@ impl Menus {
         let mut select_idx = 0;
         let list_len = list.clone().count();
         let mut keys = io::stdin().lock().keys();
-        
         write!(self.stdout, "{}\r\n", title)?;
-        let pos = self.stdout.cursor_pos().unwrap();
         let ret = loop {
             for (i, selection) in list.clone().enumerate() {
                 if i == select_idx {
@@ -88,7 +85,7 @@ impl Menus {
             write!(
                 self.stdout,
                 "\r{}{}",
-                cursor::Goto(pos.0, pos.1),
+                cursor::Up(list_len as u16),
                 clear::AfterCursor
             )?;
             match key {
@@ -122,7 +119,6 @@ impl Menus {
         let mut select_idx = 0;
         let mut cursor = 0;
         let mut input = String::new();
-        let pos = self.stdout.cursor_pos().unwrap();
 
         let mut keys = io::stdin().lock().keys();
         let ret = loop {
@@ -155,7 +151,7 @@ impl Menus {
                 }
             }
             if list_len > 0 {
-                write!(self.stdout, "{}", cursor::Goto(pos.0, pos.1))?;
+                write!(self.stdout, "{}", cursor::Up(list_len as u16 + 4))?;
             }
             write!(
                 self.stdout,
@@ -228,8 +224,6 @@ impl Menus {
         title: &str,
     ) -> io::Result<SelectNumberedResp> {
         let list_len = list.clone().count();
-        let pos = self.stdout.cursor_pos().unwrap();
-
         write!(self.stdout, "\r{title}\r\n")?;
         for (i, s) in list.enumerate() {
             write!(self.stdout, "{}. {}\r\n", (i + 1).green(), s)?;
@@ -245,7 +239,7 @@ impl Menus {
         write!(
             self.stdout,
             "\r{}{}",
-            cursor::Goto(pos.0, pos.1),
+            cursor::Up(list_len as u16 + 2),
             clear::AfterCursor,
         )?;
         self.stdout.flush()?;
