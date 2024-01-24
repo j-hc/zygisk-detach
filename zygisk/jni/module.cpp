@@ -17,8 +17,7 @@ using zygisk::ServerSpecializeArgs;
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "zygisk-detach", __VA_ARGS__)
 
-#define DETACH_CAP 1024
-static unsigned char DETACH_TXT[DETACH_CAP] = {0};
+static unsigned char* DETACH_TXT;
 static uint8_t HEADERS_COUNT;
 
 static inline void handle_transact(uint8_t* data, size_t data_size) {
@@ -139,19 +138,18 @@ class Sigringe : public zygisk::ModuleBase {
         if (size <= 0) {
             LOGD("ERROR: detach.bin <= 0");
             return 0;
-        } else if (size > DETACH_CAP - 1) {  // -1 because of the null terminator
-            LOGD("ERROR: detach.bin > %d", DETACH_CAP - 1);
+        }
+        DETACH_TXT = (unsigned char*)malloc(size + 1);
+        auto r = read(fd, DETACH_TXT, size);
+        if (r < 0) {
+            LOGD("ERROR: read companion");
             return 0;
         }
-        int received = 0;
-        while (received < size) {
-            auto red = read(fd, DETACH_TXT + received, size - received);
-            if (red < 0) {
-                LOGD("ERROR: read companion");
-                return 0;
-            }
-            received += red;
+        if (r != size) {
+            LOGD("ERROR: read companion not whole");
+            return 0;
         }
+        DETACH_TXT[size] = 0;
         return (size_t)size;
     }
 };

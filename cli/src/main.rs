@@ -303,17 +303,12 @@ fn main_menu(menus: &mut Menus) -> IOResult<Op> {
 }
 
 fn bin_serialize(app: &str, f: &mut File) -> IOResult<()> {
-    const DETACH_CAP: u64 = 1024;
     let mut w = Vec::with_capacity(2 * app.as_bytes().len() - 1);
     for b in app.as_bytes()[..app.len() - 1].iter().cloned() {
         w.push(b);
         w.push(0);
     }
     w.push(app.as_bytes()[app.len() - 1]);
-    if f.metadata()?.len() + w.len() as u64 > DETACH_CAP {
-        eprintln!("detach.bin cannot be larger than {DETACH_CAP}b\r");
-        std::process::exit(1);
-    }
     let mut f = BufWriter::new(f);
     f.write(&[w
         .len()
