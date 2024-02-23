@@ -19,13 +19,7 @@ if [ -f "$MODPATH/detach.txt" ]; then
 	ui_print "$OP"
 fi
 
-ALIAS="alias detach='su -c detach'"
-BASHRC="/data/data/com.termux/files/home/.bashrc"
-if [ -d "/data/data/com.termux/files/home/" ]; then
-	grep -qxF "$ALIAS" "$BASHRC" || echo "$ALIAS" >>"$BASHRC"
-	ui_print "- Run 'detach' in termux after the reboot"
-else
-	ui_print "- Run 'su -c detach' in terminal after the reboot"
-fi
+ui_print "- Run 'su -c detach' in terminal after the reboot"
+ui_print "- Or use zygisk-detach-app"
 
 ui_print "  by j-hc (github.com/j-hc)"
