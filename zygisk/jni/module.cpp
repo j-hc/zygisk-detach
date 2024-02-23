@@ -11,36 +11,10 @@
 #include "parcel.hpp"
 #include "zygisk.hpp"
 
-using zygisk::Api;
-using zygisk::AppSpecializeArgs;
-using zygisk::ServerSpecializeArgs;
-
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "zygisk-detach", __VA_ARGS__)
 
-static unsigned char* DETACH_TXT;
+static uint8_t* DETACH_TXT;
 static uint8_t HEADERS_COUNT;
-
-static inline void handle_transact(uint8_t* data, size_t data_size) {
-    auto p = FakeParcel{data, 0};
-    if (!p.enforceInterface(data_size, HEADERS_COUNT)) return;
-    uint32_t pkg_len = p.readInt32();
-    uint32_t pkg_len_b = pkg_len * 2 - 1;
-    auto pkg_ptr = p.readString16(pkg_len);
-
-    size_t i = 0;
-    uint8_t dlen;
-    while ((dlen = DETACH_TXT[i])) {
-        unsigned char* dptr = DETACH_TXT + i + sizeof(dlen);
-        i += sizeof(dlen) + dlen;
-        if (dlen != pkg_len_b) continue;
-        if (!memcmp(dptr, pkg_ptr, dlen)) {
-            *pkg_ptr = 0;
-            return;
-        }
-    }
-}
-
-int (*transact_orig)(void*, int32_t, uint32_t, void*, void*, uint32_t);
 
 struct PParcel {
     size_t error;
@@ -48,22 +22,55 @@ struct PParcel {
     size_t data_size;
 };
 
+static inline bool is_detached(PParcel* __restrict__ parcel) {
+    auto p = FakeParcel{parcel->data, 0};
+    if (!p.enforceInterface(parcel->data_size, HEADERS_COUNT)) return false;
+    uint32_t pkg_len = p.readInt32();
+    uint32_t pkg_len_b = pkg_len * 2 - 1;
+    auto pkg_ptr = p.readString16(pkg_len);
+
+    size_t i = 0;
+    uint8_t dlen;
+    while ((dlen = DETACH_TXT[i])) {
+        uint8_t* dptr = DETACH_TXT + i + sizeof(dlen);
+        i += sizeof(dlen) + dlen;
+        if (dlen != pkg_len_b)
+            continue;
+        if (!memcmp(dptr, pkg_ptr, dlen))
+            return true;
+    }
+    return false;
+}
+
+int (*transact_orig)(void*, int32_t, uint32_t, void*, void*, uint32_t);
+
 int transact_hook(void* self, int32_t handle, uint32_t code, void* pdata, void* preply, uint32_t flags) {
+    static uint8_t REPLY_BUF[8] = {0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00};
+    int ret = transact_orig(self, handle, code, pdata, preply, flags);
     auto parcel = (PParcel*)pdata;
-    handle_transact(parcel->data, parcel->data_size);
-    return transact_orig(self, handle, code, pdata, preply, flags);
+    if (is_detached(parcel)) {
+        auto reply = (PParcel*)preply;
+        reply->data_size = 8;
+        reply->data = REPLY_BUF;
+    }
+    return ret;
 }
 
 class Sigringe : public zygisk::ModuleBase {
    public:
-    void onLoad(Api* api, JNIEnv* env) override {
+    void onLoad(zygisk::Api* api, JNIEnv* env) override {
         this->api = api;
         this->env = env;
     }
 
-    void preAppSpecialize(AppSpecializeArgs* args) override {
+    void preServerSpecialize(zygisk::ServerSpecializeArgs* args) override {
+        (void)args;
+        api->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+    }
+
+    void preAppSpecialize(zygisk::AppSpecializeArgs* args) override {
         const char* process = env->GetStringUTFChars(args->nice_name, nullptr);
-        if (memcmp(process, "com.android.vending\0", 20)) {
+        if (memcmp(process, "com.android.vending", 20)) {
             env->ReleaseStringUTFChars(args->nice_name, process);
             api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
             return;
@@ -107,7 +114,7 @@ class Sigringe : public zygisk::ModuleBase {
     }
 
    private:
-    Api* api;
+    zygisk::Api* api;
     JNIEnv* env;
 
     bool getBinder(ino_t* inode, dev_t* dev) {
@@ -139,7 +146,7 @@ class Sigringe : public zygisk::ModuleBase {
             LOGD("ERROR: detach.bin <= 0");
             return 0;
         }
-        DETACH_TXT = (unsigned char*)malloc(size + 1);
+        DETACH_TXT = (uint8_t*)malloc(size + 1);
         auto r = read(fd, DETACH_TXT, size);
         if (r < 0) {
             LOGD("ERROR: read companion");
