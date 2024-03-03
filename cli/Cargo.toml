@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-termion = "2"
+termion = "3"
 
 [profile.dev]
 panic = "abort"

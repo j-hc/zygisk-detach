@@ -15,6 +15,7 @@ impl<D: Display> Display for Colored<D> {
     }
 }
 
+#[allow(dead_code)]
 pub trait ToColored: Display + Sized {
     fn faint(&self) -> Colored<&Self> {
         Colored {
