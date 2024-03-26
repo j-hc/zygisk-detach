@@ -22,9 +22,9 @@ struct PParcel {
     size_t data_size;
 };
 
-static inline bool is_detached(PParcel* __restrict__ parcel) {
+static inline void detach(PParcel* parcel) {
     auto p = FakeParcel{parcel->data, 0};
-    if (!p.enforceInterface(parcel->data_size, HEADERS_COUNT)) return false;
+    if (!p.enforceInterface(parcel->data_size, HEADERS_COUNT)) return;
     uint32_t pkg_len = p.readInt32();
     uint32_t pkg_len_b = pkg_len * 2 - 1;
     auto pkg_ptr = p.readString16(pkg_len);
@@ -36,24 +36,19 @@ static inline bool is_detached(PParcel* __restrict__ parcel) {
         i += sizeof(dlen) + dlen;
         if (dlen != pkg_len_b)
             continue;
-        if (!memcmp(dptr, pkg_ptr, dlen))
-            return true;
+        if (!memcmp(dptr, pkg_ptr, dlen)) {
+            *pkg_ptr = 0;
+            return;
+        }
     }
-    return false;
 }
 
 int (*transact_orig)(void*, int32_t, uint32_t, void*, void*, uint32_t);
 
 int transact_hook(void* self, int32_t handle, uint32_t code, void* pdata, void* preply, uint32_t flags) {
-    static uint8_t REPLY_BUF[8] = {0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00};
-    int ret = transact_orig(self, handle, code, pdata, preply, flags);
     auto parcel = (PParcel*)pdata;
-    if (is_detached(parcel)) {
-        auto reply = (PParcel*)preply;
-        reply->data_size = 8;
-        reply->data = REPLY_BUF;
-    }
-    return ret;
+    detach(parcel);
+    return transact_orig(self, handle, code, pdata, preply, flags);
 }
 
 class Sigringe : public zygisk::ModuleBase {
@@ -88,12 +83,12 @@ class Sigringe : public zygisk::ModuleBase {
         char sdk_str[2];
         if (__system_property_get("ro.build.version.sdk", sdk_str)) {
             int sdk = atoi(sdk_str);
-            if (sdk >= 30) HEADERS_COUNT = 3;
-            else if (sdk == 29) HEADERS_COUNT = 2;
-            else HEADERS_COUNT = 1;
+            if (sdk >= 30) HEADERS_COUNT = 3 * sizeof(uint32_t);
+            else if (sdk == 29) HEADERS_COUNT = 2 * sizeof(uint32_t);
+            else HEADERS_COUNT = 1 * sizeof(uint32_t);
         } else {
             LOGD("WARN: could not get sdk version (fallback=3)");
-            HEADERS_COUNT = 3;
+            HEADERS_COUNT = 3 * sizeof(uint32_t);
         }
 
         ino_t inode;
