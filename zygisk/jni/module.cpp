@@ -14,7 +14,7 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "zygisk-detach", __VA_ARGS__)
 
 static uint8_t* DETACH_TXT;
-static uint8_t HEADERS_COUNT;
+static uint8_t HEADERS_LEN;
 
 struct PParcel {
     size_t error;
@@ -22,11 +22,13 @@ struct PParcel {
     size_t data_size;
 };
 
-static inline void detach(PParcel* parcel) {
+static inline void detach(PParcel* parcel, uint32_t code) {
     auto p = FakeParcel{parcel->data, 0};
-    if (!p.enforceInterface(parcel->data_size, HEADERS_COUNT)) return;
+    if (!p.enforceInterface(parcel->data_size, HEADERS_LEN)) return;
     uint32_t pkg_len = p.readInt32();
     uint32_t pkg_len_b = pkg_len * 2 - 1;
+    if (pkg_len_b > UINT8_MAX) return;
+    if (code == getPackageInfo_code) return;
     auto pkg_ptr = p.readString16(pkg_len);
 
     size_t i = 0;
@@ -47,11 +49,11 @@ int (*transact_orig)(void*, int32_t, uint32_t, void*, void*, uint32_t);
 
 int transact_hook(void* self, int32_t handle, uint32_t code, void* pdata, void* preply, uint32_t flags) {
     auto parcel = (PParcel*)pdata;
-    detach(parcel);
+    detach(parcel, code);
     return transact_orig(self, handle, code, pdata, preply, flags);
 }
 
-class Sigringe : public zygisk::ModuleBase {
+class ZygiskDetach : public zygisk::ModuleBase {
    public:
     void onLoad(zygisk::Api* api, JNIEnv* env) override {
         this->api = api;
@@ -65,7 +67,8 @@ class Sigringe : public zygisk::ModuleBase {
 
     void preAppSpecialize(zygisk::AppSpecializeArgs* args) override {
         const char* process = env->GetStringUTFChars(args->nice_name, nullptr);
-        if (memcmp(process, "com.android.vending", 19)) {
+#define vending "com.android.vending"
+        if (memcmp(process, vending, STR_LEN(vending))) {
             env->ReleaseStringUTFChars(args->nice_name, process);
             api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
             return;
@@ -83,12 +86,12 @@ class Sigringe : public zygisk::ModuleBase {
         char sdk_str[2];
         if (__system_property_get("ro.build.version.sdk", sdk_str)) {
             int sdk = atoi(sdk_str);
-            if (sdk >= 30) HEADERS_COUNT = 3 * sizeof(uint32_t);
-            else if (sdk == 29) HEADERS_COUNT = 2 * sizeof(uint32_t);
-            else HEADERS_COUNT = 1 * sizeof(uint32_t);
+            if (sdk >= 30) HEADERS_LEN = 3 * sizeof(uint32_t);
+            else if (sdk == 29) HEADERS_LEN = 2 * sizeof(uint32_t);
+            else HEADERS_LEN = 1 * sizeof(uint32_t);
         } else {
             LOGD("WARN: could not get sdk version (fallback=3)");
-            HEADERS_COUNT = 3 * sizeof(uint32_t);
+            HEADERS_LEN = 3 * sizeof(uint32_t);
         }
 
         ino_t inode;
@@ -121,7 +124,8 @@ class Sigringe : public zygisk::ModuleBase {
             unsigned int dev_major, dev_minor;
             int cur;
             sscanf(mapbuf, "%*s %s %*x %x:%x %lu %*s%n", flags, &dev_major, &dev_minor, inode, &cur);
-            if (memcmp(&mapbuf[cur - 12], "libbinder.so", 12) == 0 && flags[2] == 'x') {
+#define libbinder "libbinder.so"
+            if (memcmp(&mapbuf[cur - STR_LEN(libbinder)], libbinder, STR_LEN(libbinder)) == 0 && flags[2] == 'x') {
                 *dev = makedev(dev_major, dev_minor);
                 fclose(fp);
                 return true;
@@ -187,5 +191,5 @@ static void companion_handler(int remote_fd) {
     close(fd);
 }
 
-REGISTER_ZYGISK_MODULE(Sigringe)
+REGISTER_ZYGISK_MODULE(ZygiskDetach)
 REGISTER_ZYGISK_COMPANION(companion_handler)

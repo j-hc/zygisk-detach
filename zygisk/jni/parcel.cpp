@@ -2,13 +2,8 @@
 
 #include <stdint.h>
 
-#define ARRAY_LEN(a) (sizeof(a) / sizeof(a[0]))
-#define PM_DESCRIPTOR_LEN (ARRAY_LEN(u"android.content.pm.IPackageManager") - 1)
+#define PM_DESCRIPTOR_LEN (STR_LEN(u"android.content.pm.IPackageManager"))
 #define PM_DESCRIPTOR_BYTES (PM_DESCRIPTOR_LEN * 2)
-
-// bool String16Eq(const char16_t* s1, size_t len1, const char16_t* s2, size_t len2) {
-//     return (len1 == len2 && !memcmp(s1, s2, len1 * sizeof(char16_t)));
-// }
 
 void FakeParcel::skip(size_t skip) {
     cur += skip;
