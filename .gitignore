@@ -5,3 +5,4 @@ test*
 magisk/system/bin/*
 *.log
 zygisk-rust
+aidl/*.aidl*
