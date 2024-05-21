@@ -4,10 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-termion = "3"
-
-[profile.dev]
-panic = "abort"
+termion = "4"
 
 [profile.release-pr]
 inherits = "release"

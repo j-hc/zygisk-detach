@@ -1,0 +1,11 @@
+{
+  "name": "ksu-webui",
+  "version": "1.0.0",
+  "author": "j-hc",
+  "dependencies": {
+    "kernelsu": "^1.0.6"
+  },
+  "devDependencies": {
+    "parcel": "^2.12.0"
+  }
+}

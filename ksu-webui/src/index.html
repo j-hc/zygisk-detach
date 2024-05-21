@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Document</title>
+	<link rel="stylesheet" href="styles.css" type="text/css">
+	<script type="module" crossorigin src="index.js" type="text/javascript"></script>
+</head>
+
+<body>
+	<div class="card">
+		<input type="text" class="search-input" id="search" placeholder="Search">
+	</div>
+
+	<div id="apps-list"></div>
+
+	<div class="floating-card">
+		<button class="floating-btn" id="detach">Detach</button>
+	</div>
+
+	<template id="app-template">
+		<div class="card">
+			<div class="content">
+				<p class="name"></p>
+				<input type="checkbox" class="checkbox">
+			</div>
+		</div>
+	</template>
+</body>
+
+</html>

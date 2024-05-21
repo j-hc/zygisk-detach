@@ -3,6 +3,7 @@
 b.sh
 test*
 magisk/system/bin/*
+magisk/webroot/*
 *.log
 zygisk-rust
 aidl/*.aidl*

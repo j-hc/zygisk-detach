@@ -72,28 +72,102 @@ fn main() -> ExitCode {
     }));
 
     let mut args = std::env::args().skip(1);
-    if matches!(args.next().as_deref(), Some("--serialize")) {
-        let Some(dtxt) = args.next() else {
-            eprintln!("detach.txt path not supplied.");
-            return ExitCode::FAILURE;
-        };
-        let Some(dbin) = args.next() else {
-            eprintln!("detach.bin path not supplied.");
-            return ExitCode::FAILURE;
-        };
-
-        if let Err(err) = serialize_txt(&dtxt, &dbin) {
-            eprintln!("ERROR: {err}");
-            return ExitCode::FAILURE;
-        } else {
-            println!("Serialized detach.txt");
-            return ExitCode::SUCCESS;
+    if let Some(cmd) = args.next().as_deref() {
+        match cmd {
+            "serialize" => {
+                let Some(dtxt) = args.next() else {
+                    eprintln!("ERROR: detach.txt path not supplied.");
+                    return ExitCode::FAILURE;
+                };
+                let Some(dbin) = args.next() else {
+                    eprintln!("ERROR: detach.bin path not supplied.");
+                    return ExitCode::FAILURE;
+                };
+                if let Err(err) = serialize_txt(&dtxt, &dbin) {
+                    eprintln!("ERROR: {err}");
+                    return ExitCode::FAILURE;
+                } else {
+                    println!("Serialized detach.txt");
+                    return ExitCode::SUCCESS;
+                }
+            }
+            "detachall" => {
+                let Some(pkg_names) = args.next() else {
+                    eprintln!("ERROR: package names not supplied.");
+                    return ExitCode::FAILURE;
+                };
+                if pkg_names.is_empty() {
+                    println!("Emptied the detach.bin");
+                    return ExitCode::SUCCESS;
+                }
+                let mut f = fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(MODULE_DETACH)
+                    .expect("open detach.bin");
+                for n in pkg_names.split(' ') {
+                    bin_serialize(n, &mut f).expect("write to detach.bin");
+                }
+                detach_bin_changed();
+                println!("Changes are applied. No need for a reboot!");
+                return ExitCode::SUCCESS;
+            }
+            "detach" => {
+                let Some(pkg_name) = args.next() else {
+                    eprintln!("ERROR: package name not supplied.");
+                    return ExitCode::FAILURE;
+                };
+                if detach_by_name(&pkg_name).expect("detach.txt") {
+                    println!("Changes are applied. No need for a reboot!");
+                } else {
+                    println!("{} {}", "already detached:", pkg_name);
+                }
+                return ExitCode::SUCCESS;
+            }
+            "reattach" => {
+                let Some(pkg_name) = args.next() else {
+                    eprintln!("ERROR: package name not supplied.");
+                    return ExitCode::FAILURE;
+                };
+                if reattach_by_name(&pkg_name).expect("detach.txt") {
+                    println!("{} {}", "re-attached:", pkg_name);
+                }
+                return ExitCode::SUCCESS;
+            }
+            "list" => {
+                let mut detach_txt = match fs::OpenOptions::new()
+                    .write(true)
+                    .read(true)
+                    .open(MODULE_DETACH)
+                {
+                    Ok(f) => f,
+                    Err(e) => {
+                        eprintln!("ERROR: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                };
+                let mut content = Vec::new();
+                match detach_txt.read_to_end(&mut content) {
+                    Ok(l) if l == 0 => return ExitCode::SUCCESS,
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("ERROR: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                };
+                for (app, _) in get_detached_apps(&content) {
+                    println!("{app}");
+                }
+                return ExitCode::SUCCESS;
+            }
+            _ => {}
         }
     }
+
     #[cfg(target_os = "android")]
-    if let Ok(true) = check_denylist() {
-        eprintln!("Stop putting Play Store in denylist!");
-    }
+    let _ = check_denylist();
+
     let mut menus = Menus::new();
     let ret = match interactive(&mut menus) {
         Ok(()) => ExitCode::SUCCESS,
@@ -106,7 +180,8 @@ fn main() -> ExitCode {
     ret
 }
 
-fn check_denylist() -> io::Result<bool> {
+#[cfg(target_os = "android")]
+fn check_denylist() -> io::Result<()> {
     let op = Command::new("magisk")
         .args(["--denylist", "ls"])
         .stdout(std::process::Stdio::piped())
@@ -118,10 +193,9 @@ fn check_denylist() -> io::Result<bool> {
             .args(["--denylist", "rm", "com.android.vending"])
             .spawn()?
             .wait()?;
-        Ok(true)
-    } else {
-        Ok(false)
+        eprintln!("Do not put Play Store in denylist!");
     }
+    Ok(())
 }
 
 fn detach_bin_changed() {
@@ -196,7 +270,7 @@ fn reattach_menu(menus: &mut Menus) -> IOResult<()> {
     let mut content = Vec::new();
     detach_txt.read_to_end(&mut content)?;
     detach_txt.seek(io::SeekFrom::Start(0))?;
-    let detached_apps = get_detached_apps(menus, &content);
+    let detached_apps = get_detached_apps(&content);
     let detach_len = detached_apps.len();
     if detach_len == 0 {
         text!(menus, "detach.bin is empty");
@@ -221,7 +295,26 @@ fn reattach_menu(menus: &mut Menus) -> IOResult<()> {
     Ok(())
 }
 
-fn get_detached_apps(menus: &mut Menus, detach_txt: &[u8]) -> Vec<(String, Range<usize>)> {
+fn reattach_by_name(pkg_name: &str) -> IOResult<bool> {
+    let mut detach_txt = fs::OpenOptions::new()
+        .write(true)
+        .read(true)
+        .open(MODULE_DETACH)?;
+    let mut content = Vec::new();
+    detach_txt.read_to_end(&mut content)?;
+    detach_txt.seek(io::SeekFrom::Start(0))?;
+    let detached_apps = get_detached_apps(&content);
+    let Some(reattach_app) = detached_apps.iter().find(|(name, _)| name == pkg_name) else {
+        return Ok(false);
+    };
+    content.drain(reattach_app.1.clone());
+    detach_txt.set_len(0)?;
+    detach_txt.write_all(&content)?;
+    detach_bin_changed();
+    Ok(true)
+}
+
+fn get_detached_apps(detach_txt: &[u8]) -> Vec<(String, Range<usize>)> {
     let mut i = 0;
     let mut detached = Vec::new();
     while i < detach_txt.len() {
@@ -230,7 +323,6 @@ fn get_detached_apps(menus: &mut Menus, detach_txt: &[u8]) -> Vec<(String, Range
         i += SZ_LEN;
         let Some(encoded_name) = &detach_txt.get(i..i + len as usize) else {
             eprintln!("Corrupted detach.bin. Reset and try again.");
-            let _ = menus.cursor_show();
             std::process::exit(1);
         };
         let name = String::from_utf8(encoded_name.iter().step_by(2).cloned().collect()).unwrap();
@@ -353,26 +445,31 @@ fn detach_menu(menus: &mut Menus) -> IOResult<()> {
     )?;
     menus.cursor_hide()?;
     if let Some(detach_app) = selected {
-        let mut f = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .read(true)
-            .open(MODULE_DETACH)?;
-        let mut buf: Vec<u8> = Vec::new();
-        f.read_to_end(&mut buf)?;
-        if !get_detached_apps(menus, &buf)
-            .iter()
-            .any(|(s, _)| s == detach_app)
-        {
-            bin_serialize(detach_app, &mut f)?;
+        if detach_by_name(detach_app)? {
             textln!(menus, "{} {}", "detach:".green(), detach_app);
             textln!(menus, "Changes are applied. No need for a reboot!");
-            detach_bin_changed();
         } else {
             textln!(menus, "{} {}", "already detached:".green(), detach_app);
         }
     }
     Ok(())
+}
+
+fn detach_by_name(detach_app: &str) -> IOResult<bool> {
+    let mut f = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .read(true)
+        .open(MODULE_DETACH)?;
+    let mut buf: Vec<u8> = Vec::new();
+    f.read_to_end(&mut buf)?;
+    if !get_detached_apps(&buf).iter().any(|(s, _)| s == detach_app) {
+        bin_serialize(detach_app, &mut f)?;
+        detach_bin_changed();
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 fn _kill_store_am() -> IOResult<()> {

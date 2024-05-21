@@ -1,0 +1,58 @@
+.card {
+	border: 1px solid #ccc;
+	padding: 20px;
+	margin-bottom: 10px;
+}
+
+.content {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.name {
+	margin: 0;
+	overflow-wrap: break-word;
+	max-width: calc(100% - 30px);
+	display: inline-block;
+	word-break: break-word;
+}
+
+.checkbox {
+	margin-left: auto;
+}
+
+.floating-card {
+	position: fixed;
+	bottom: 15px;
+	right: 15px;
+	float: right;
+	z-index: 3;
+}
+
+.floating-btn {
+	border-radius: 24px;
+	font-size: 10px;
+	background-color: #007bff;
+	color: white;
+	border: none;
+	width: auto;
+	height: auto;
+	font-size: 18px;
+	padding: 10px 20px;
+	cursor: pointer;
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+	transition: transform 0.3s ease-in-out;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
+.search-input {
+	margin-left: 5px;
+	padding: 5px;
+	outline: none;
+	font-size: 14px;
+	width: 200px;
+	border: none;
+}

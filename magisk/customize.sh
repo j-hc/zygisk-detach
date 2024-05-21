@@ -1,6 +1,6 @@
 #!/system/bin/sh
 
-if [ -n "$KSU_VER" ] && [ ! -d "$NVBASE/modules/zygisksu" ]; then
+if [ -n "$KSU" ] && [ ! -d "$NVBASE/modules/zygisksu" ]; then
 	abort "You do not have ZygiskNext installed. Bye."
 fi
 
@@ -15,11 +15,14 @@ fi
 
 if [ -f "$MODPATH/detach.txt" ]; then
 	ui_print "- detach.txt inside module! Generating detach.bin"
-	OP=$("$MODPATH"/system/bin/detach --serialize "$MODPATH/detach.txt" "$MODPATH/detach.bin" 2>&1)
+	OP=$("$MODPATH"/system/bin/detach serialize "$MODPATH/detach.txt" "$MODPATH/detach.bin" 2>&1)
 	ui_print "$OP"
 fi
 
 ui_print "- Run 'su -c detach' in terminal after the reboot"
 ui_print "- Or use zygisk-detach-app"
-
+if [ -n "$KSU" ]; then
+	ui_print "- Or use the WebUI from KernelSU app"
+fi
+ui_print ""
 ui_print "  by j-hc (github.com/j-hc)"

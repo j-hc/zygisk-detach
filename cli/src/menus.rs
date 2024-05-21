@@ -10,7 +10,7 @@ macro_rules! text {
     ($dst:expr, $($arg:tt)*) => {{
             write!(
                 $dst.stdout,
-                "{}{}{}{}\r",
+                "\r{}{}{}{}\r",
                 cursor::Up(1),
                 clear::CurrentLine,
                 format_args!($($arg)*),
