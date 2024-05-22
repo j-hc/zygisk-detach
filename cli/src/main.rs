@@ -121,7 +121,7 @@ fn main() -> ExitCode {
                 if detach_by_name(&pkg_name).expect("detach.txt") {
                     println!("Changes are applied. No need for a reboot!");
                 } else {
-                    println!("{} {}", "already detached:", pkg_name);
+                    println!("already detached: {}", pkg_name);
                 }
                 return ExitCode::SUCCESS;
             }
@@ -131,7 +131,7 @@ fn main() -> ExitCode {
                     return ExitCode::FAILURE;
                 };
                 if reattach_by_name(&pkg_name).expect("detach.txt") {
-                    println!("{} {}", "re-attached:", pkg_name);
+                    println!("re-attached: {}", pkg_name);
                 }
                 return ExitCode::SUCCESS;
             }
@@ -142,6 +142,7 @@ fn main() -> ExitCode {
                     .open(MODULE_DETACH)
                 {
                     Ok(f) => f,
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => return ExitCode::SUCCESS,
                     Err(e) => {
                         eprintln!("ERROR: {e}");
                         return ExitCode::FAILURE;
@@ -149,7 +150,7 @@ fn main() -> ExitCode {
                 };
                 let mut content = Vec::new();
                 match detach_txt.read_to_end(&mut content) {
-                    Ok(l) if l == 0 => return ExitCode::SUCCESS,
+                    Ok(0) => return ExitCode::SUCCESS,
                     Ok(_) => {}
                     Err(e) => {
                         eprintln!("ERROR: {e}");
@@ -402,7 +403,7 @@ fn bin_serialize(app: &str, f: &mut File) -> IOResult<()> {
     }
     w.push(app.as_bytes()[app.len() - 1]);
     let mut f = BufWriter::new(f);
-    f.write(&[w
+    f.write_all(&[w
         .len()
         .try_into()
         .expect("app name cannot be longer than 255")])?;
