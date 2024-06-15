@@ -118,13 +118,13 @@ class ZygiskDetach : public zygisk::ModuleBase {
     bool getBinder(ino_t* inode, dev_t* dev) {
         FILE* fp = fopen("/proc/self/maps", "r");
         if (!fp) return false;
-        char mapbuf[256];
+        char mapbuf[256], flags[8];
         while (fgets(mapbuf, sizeof(mapbuf), fp)) {
-            char flags[8];
             unsigned int dev_major, dev_minor;
             int cur;
             sscanf(mapbuf, "%*s %s %*x %x:%x %lu %*s%n", flags, &dev_major, &dev_minor, inode, &cur);
 #define libbinder "libbinder.so"
+            if (cur < (int)STR_LEN(libbinder)) continue;
             if (memcmp(&mapbuf[cur - STR_LEN(libbinder)], libbinder, STR_LEN(libbinder)) == 0 && flags[2] == 'x') {
                 *dev = makedev(dev_major, dev_minor);
                 fclose(fp);
