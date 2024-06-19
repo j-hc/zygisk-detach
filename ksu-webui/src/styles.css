@@ -56,3 +56,21 @@
 	width: 200px;
 	border: none;
 }
+
+@media (prefers-color-scheme: dark) {
+
+	body {
+		background-color: #121212;
+		color: #eee;
+	}
+
+	.card {
+		border-color: #2B2B2B;
+	}
+
+	.search-input {
+		background-color: #121212;
+		color: #eee;
+	}
+
+}
