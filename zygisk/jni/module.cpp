@@ -121,7 +121,7 @@ class ZygiskDetach : public zygisk::ModuleBase {
         char mapbuf[256], flags[8];
         while (fgets(mapbuf, sizeof(mapbuf), fp)) {
             unsigned int dev_major, dev_minor;
-            int cur;
+            int cur = 0;
             sscanf(mapbuf, "%*s %s %*x %x:%x %lu %*s%n", flags, &dev_major, &dev_minor, inode, &cur);
 #define libbinder "libbinder.so"
             if (cur < (int)STR_LEN(libbinder)) continue;
