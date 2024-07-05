@@ -6,7 +6,7 @@ use std::io::{BufWriter, Read, Write};
 use std::mem::size_of;
 use std::ops::Range;
 use std::panic::Location;
-use std::process::{Command, ExitCode, Stdio};
+use std::process::{Command, ExitCode};
 use termion::raw::IntoRawMode;
 
 use termion::event::Key;
@@ -96,16 +96,16 @@ fn main() -> ExitCode {
                     eprintln!("ERROR: package names not supplied.");
                     return ExitCode::FAILURE;
                 };
-                if pkg_names.is_empty() {
-                    println!("Emptied the detach.bin");
-                    return ExitCode::SUCCESS;
-                }
                 let mut f = fs::OpenOptions::new()
                     .create(true)
                     .write(true)
                     .truncate(true)
                     .open(MODULE_DETACH)
                     .expect("open detach.bin");
+                if pkg_names.is_empty() {
+                    println!("Emptied the detach.bin");
+                    return ExitCode::SUCCESS;
+                }
                 for n in pkg_names.split(' ') {
                     bin_serialize(n, &mut f).expect("write to detach.bin");
                 }
@@ -169,8 +169,8 @@ fn main() -> ExitCode {
     #[cfg(target_os = "android")]
     let _ = Command::new("magisk")
         .args(["--denylist", "rm", "com.android.vending"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .and_then(|mut p| p.wait());
 
@@ -327,11 +327,15 @@ fn get_installed_apps() -> IOResult<Vec<u8>> {
 
 #[cfg(target_os = "android")]
 fn get_installed_apps() -> IOResult<Vec<u8>> {
-    Ok(Command::new("pm")
+    let op = Command::new("pm")
         .args(["list", "packages"])
         .stdout(std::process::Stdio::piped())
-        .output()?
-        .stdout)
+        .stderr(std::process::Stdio::piped())
+        .output()?;
+    if !op.status.success() {
+        panic!("pm: '{}'", String::from_utf8_lossy(&op.stderr));
+    }
+    Ok(op.stdout)
 }
 
 #[derive(Clone, Copy)]
@@ -401,6 +405,7 @@ fn bin_serialize(app: &str, f: &mut File) -> IOResult<()> {
 
 fn detach_menu(menus: &mut Menus) -> IOResult<()> {
     let installed_apps = get_installed_apps()?;
+    assert_ne!(installed_apps.len(), 0);
     let apps: Vec<&str> = installed_apps[..installed_apps.len() - 1]
         .split(|&e| e == b'\n')
         .map(|e| {
