@@ -6,7 +6,7 @@ use std::io::{BufWriter, Read, Write};
 use std::mem::size_of;
 use std::ops::Range;
 use std::panic::Location;
-use std::process::{Command, ExitCode};
+use std::process::{Command, ExitCode, Stdio};
 use termion::raw::IntoRawMode;
 
 use termion::event::Key;
@@ -167,7 +167,12 @@ fn main() -> ExitCode {
     }
 
     #[cfg(target_os = "android")]
-    let _ = check_denylist();
+    let _ = Command::new("magisk")
+        .args(["--denylist", "rm", "com.android.vending"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .and_then(|mut p| p.wait());
 
     let mut menus = Menus::new();
     let ret = match interactive(&mut menus) {
@@ -179,24 +184,6 @@ fn main() -> ExitCode {
     };
     menus.cursor_show().unwrap();
     ret
-}
-
-#[cfg(target_os = "android")]
-fn check_denylist() -> io::Result<()> {
-    let op = Command::new("magisk")
-        .args(["--denylist", "ls"])
-        .stdout(std::process::Stdio::piped())
-        .output()?
-        .stdout;
-    let op = String::from_utf8_lossy(&op);
-    if op.contains("com.android.vending") {
-        Command::new("magisk")
-            .args(["--denylist", "rm", "com.android.vending"])
-            .spawn()?
-            .wait()?;
-        eprintln!("Do not put Play Store in denylist!");
-    }
-    Ok(())
 }
 
 fn detach_bin_changed() {
