@@ -7,6 +7,16 @@ fi
 mv -f "$MODPATH/system/bin/detach-${ARCH}" "$MODPATH/system/bin/detach"
 rm "$MODPATH"/system/bin/detach-*
 
+# symlink detach to manager path
+# for ez termux usage
+manager_paths="/data/adb/ap/bin /data/adb/ksu/bin"
+for i in $manager_paths; do
+	if [ -d $i ] && [ ! -f $i/detach ]; then
+		echo "[+] creating symlink in $i"
+		ln -sf /data/adb/modules/zygisk-detach/system/bin/detach $i/detach
+	fi
+done
+
 # preserve detach.bin
 if [ -f "$NVBASE/modules/zygisk-detach/detach.bin" ]; then
 	ui_print "- Preserving existing detach.bin"
