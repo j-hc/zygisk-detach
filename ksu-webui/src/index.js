@@ -42,7 +42,7 @@ async function main() {
 	const pkgs = await run("pm list packages");
 	if (pkgs === undefined) return;
 
-	const detached_list_out = await run("detach list");
+	const detached_list_out = await run("/data/adb/modules/zygisk-detach/system/bin/detach list");
 	if (detached_list_out === undefined) return;
 	const detached = detached_list_out.split('\n');
 
@@ -64,7 +64,7 @@ async function main() {
 
 	document.getElementById("detach").addEventListener('click', (e) => {
 		const detach_arg = detach_list.join(' ');
-		run(`detach detachall "${detach_arg}"`).then((out) => toast(out));
+		run(`/data/adb/modules/zygisk-detach/system/bin/detach detachall "${detach_arg}"`).then((out) => toast(out));
 	});
 }
 
