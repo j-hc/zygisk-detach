@@ -2,7 +2,7 @@
 *.so
 b.sh
 test*
-magisk/system/bin/*
+magisk/detach-*
 magisk/webroot/*
 *.log
 zygisk-rust
