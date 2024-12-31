@@ -45,10 +45,17 @@ async function main() {
 	const detached_list_out = await run("/data/adb/modules/zygisk-detach/detach list");
 	if (detached_list_out === undefined) return;
 	const detached = detached_list_out.split('\n');
-
+	let uninstalled = [...detached];
 	for (const pkg of pkgs.split('\n').map((line) => line.split(':')[1])) {
-		populateApp(pkg, detached.includes(pkg));
+		const incls = detached.includes(pkg);
+		populateApp(pkg, incls);
+		if (incls) {
+			const index = uninstalled.indexOf(pkg);
+			if (index > -1) uninstalled.splice(index, 1);
+		}
+
 	}
+	for (const pkg of uninstalled) populateApp(pkg, true);
 	sortChecked();
 
 	document.getElementById("search").addEventListener('input', (e) => {
