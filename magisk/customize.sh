@@ -6,6 +6,7 @@ fi
 
 mv -f "$MODPATH/detach-${ARCH}" "$MODPATH/detach"
 rm "$MODPATH"/detach-*
+chmod +x "$MODPATH/detach"
 
 # preserve detach.bin
 if [ -f "$NVBASE/modules/zygisk-detach/detach.bin" ]; then
