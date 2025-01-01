@@ -20,6 +20,16 @@ if [ -f "$MODPATH/detach.txt" ]; then
 	ui_print "$OP"
 fi
 
+# symlink detach to manager path
+# for ez termux usage
+manager_paths="/data/adb/ap/bin /data/adb/ksu/bin"
+for i in $manager_paths; do
+	if [ -d $i ] && [ ! -f $i/detach ]; then
+		echo "[+] creating symlink in $i"
+		ln -sf /data/adb/modules/zygisk-detach/detach $i/detach
+	fi
+done
+
 ui_print "- Run 'su -c detach' in terminal after the reboot"
 ui_print "- Or use zygisk-detach-app"
 if [ -n "$KSU" ]; then
