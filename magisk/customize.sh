@@ -20,12 +20,7 @@ if [ -f "$MODPATH/detach.txt" ]; then
 	ui_print "$OP"
 fi
 
-if ! grep -q 'alias detach' /data/data/com.termux/files/home/.bashrc; then
-	echo "alias detach='su -c /data/adb/modules/zygisk-detach/detach'" >>/data/data/com.termux/files/home/.bashrc
-	chmod 777 /data/data/com.termux/files/home/.bashrc
-fi
-
-ui_print "- Run 'detach' in termux after the reboot"
+ui_print "- Run 'su -c detach' in terminal after the reboot"
 ui_print "- Or use zygisk-detach-app"
 if [ -n "$KSU" ]; then
 	ui_print "- Or use the WebUI from KernelSU app"
