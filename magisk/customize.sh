@@ -9,9 +9,9 @@ rm "$MODPATH"/detach-*
 chmod +x "$MODPATH/detach"
 
 # preserve detach.bin
-if [ -f "$NVBASE/modules/zygisk-detach/detach.bin" ]; then
+if [ -f "/data/adb/modules/zygisk-detach/detach.bin" ]; then
 	ui_print "- Preserving existing detach.bin"
-	cp -f "$NVBASE/modules/zygisk-detach/detach.bin" "$MODPATH/detach.bin"
+	cp -f "/data/adb/modules/zygisk-detach/detach.bin" "$MODPATH/detach.bin"
 fi
 
 if [ -f "$MODPATH/detach.txt" ]; then
