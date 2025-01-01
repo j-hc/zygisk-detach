@@ -60,14 +60,13 @@ type IOResult<T> = Result<T, LocErr<io::Error>>;
 
 fn main() -> ExitCode {
     std::panic::set_hook(Box::new(|panic| {
-        if let Ok(mut stdout) = io::stdout().into_raw_mode() {
-            let _ = writeln!(stdout, "\r\n{panic}\r\n");
-            let _ = writeln!(stdout, "This should not have happened.\r");
+        if let Ok(mut stderr) = io::stderr().into_raw_mode() {
+            let _ = writeln!(stderr, "\r\n{panic}\r\n");
+            let _ = writeln!(stderr, "This should not have happened.");
             let _ = writeln!(
-                stdout,
-                "Report at https://github.com/j-hc/zygisk-detach/issues\r"
+                stderr,
+                "Report at https://github.com/j-hc/zygisk-detach/issues"
             );
-            let _ = write!(stdout, "{}", cursor::Show);
         }
     }));
 
