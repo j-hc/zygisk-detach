@@ -44,8 +44,8 @@ async function main() {
 
 	const detached_list_out = await run("/data/adb/modules/zygisk-detach/detach list");
 	if (detached_list_out === undefined) return;
-	const detached = detached_list_out.split('\n');
-	let uninstalled = [...detached];
+	const detached = detached_list_out ? detached_list_out.split('\n') : [];
+	const uninstalled = detached ? [...detached] : [];
 	for (const pkg of pkgs.split('\n').map((line) => line.split(':')[1])) {
 		const incls = detached.includes(pkg);
 		populateApp(pkg, incls);
@@ -53,7 +53,6 @@ async function main() {
 			const index = uninstalled.indexOf(pkg);
 			if (index > -1) uninstalled.splice(index, 1);
 		}
-
 	}
 	for (const pkg of uninstalled) populateApp(pkg, true);
 	sortChecked();

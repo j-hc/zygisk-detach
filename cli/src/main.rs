@@ -118,6 +118,10 @@ fn main() -> ExitCode {
                     eprintln!("ERROR: package name not supplied.");
                     return ExitCode::FAILURE;
                 };
+                if pkg_name.is_empty() {
+                    eprintln!("ERROR: package name is empty.");
+                    return ExitCode::FAILURE;
+                }
                 if detach_by_name(&pkg_name).expect("detach.txt") {
                     println!("Changes are applied. No need for a reboot!");
                 } else {
