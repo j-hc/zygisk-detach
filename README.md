@@ -9,7 +9,7 @@ Hooks libbinder with zygisk
 * Enable zygisk in Magisk **or** [ZygiskNext](https://github.com/Dr-TSNG/ZygiskNext) module if you are on KernelSU
 * Flash zygisk-detach module
 * Reboot
-* Run the cli in termux: `su -c detach`  
+* Run the cli in termux: `detach`  
 	or use [zygisk-detach-app](https://github.com/j-hc/zygisk-detach-app) if you dont wanna use the terminal  
 	or use the WebUI if you are on KernelSU
 * Select apps you wish to detach. Changes are applied immediately, no need to reboot.
