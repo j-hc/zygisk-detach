@@ -1,6 +1,6 @@
 {
-	"version": "v1.19.1",
-	"versionCode": 24,
-	"zipUrl": "https://github.com/j-hc/zygisk-detach/releases/latest/download/zygisk-detach-v1.19.1.zip",
+	"version": "v1.19.2",
+	"versionCode": 25,
+	"zipUrl": "https://github.com/j-hc/zygisk-detach/releases/latest/download/zygisk-detach-v1.19.2.zip",
 	"changelog": "https://raw.githubusercontent.com/j-hc/zygisk-detach/master/README.md"
 }
