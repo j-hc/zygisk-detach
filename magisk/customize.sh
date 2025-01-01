@@ -30,6 +30,9 @@ for i in $manager_paths; do
 	fi
 done
 
+# caused by 6b8e92
+sed -i '/zygisk-detach/d' /data/data/com.termux/files/home/.bashrc > /dev/null 2>&1
+
 ui_print "- Run 'su -c detach' in terminal after the reboot"
 ui_print "- Or use zygisk-detach-app"
 if [ -n "$KSU" ]; then
