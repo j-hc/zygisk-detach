@@ -1,7 +1,7 @@
 id=zygisk-detach
 name=zygisk-detach
-version=v1.19.2
-versionCode=25
+version=v1.19.3
+versionCode=26
 author=j-hc
 description=Detaches installed apps from Play Store
 updateJson=https://raw.githubusercontent.com/j-hc/zygisk-detach/master/update.json

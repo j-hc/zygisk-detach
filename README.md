@@ -9,12 +9,12 @@ Hooks libbinder with zygisk
 * Enable zygisk in Magisk **or** [ZygiskNext](https://github.com/Dr-TSNG/ZygiskNext) module if you are on KernelSU
 * Flash zygisk-detach module
 * Reboot
-* Run the cli in termux: `detach`  
-	or use [zygisk-detach-app](https://github.com/j-hc/zygisk-detach-app) if you dont wanna use the terminal  
+* Run the cli: `detach` (`su -c /data/adb/modules/zygisk-detach/detach` if you are not using termux)
+	or use [zygisk-detach-app](https://github.com/j-hc/zygisk-detach-app) if you dont wanna use the terminal
 	or use the WebUI if you are on KernelSU
 * Select apps you wish to detach. Changes are applied immediately, no need to reboot.
 
 ### Notes
-zygisk-detach reads the generated `detach.bin` in the magisk module folder (`/data/adb/modules/zygisk-detach/detach.bin`) which means to make the usage portable, by putting your cli generated `detach.bin` inside the module zip, you can flash and detach apps without needing to run the cli again (for example between switching roms). You can get your generated `detach.bin` using the cli or from magisk module folder.  
+zygisk-detach reads the generated `detach.bin` in the magisk module folder (`/data/adb/modules/zygisk-detach/detach.bin`) which means to make the usage portable, by putting your cli generated `detach.bin` inside the module zip, you can flash and detach apps without needing to run the cli again (for example between switching roms). You can get your generated `detach.bin` using the cli or from magisk module folder.
 
 Or the same way you can put a `detach.txt` with the package names inside the module zip and it will be serialized into a `detach.bin` when flashing
