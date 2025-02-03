@@ -7,7 +7,6 @@ use std::mem::size_of;
 use std::ops::Range;
 use std::panic::Location;
 use std::process::{Command, ExitCode};
-use termion::raw::IntoRawMode;
 
 use termion::event::Key;
 use termion::{clear, cursor, terminal_size};
@@ -60,14 +59,13 @@ type IOResult<T> = Result<T, LocErr<io::Error>>;
 
 fn main() -> ExitCode {
     std::panic::set_hook(Box::new(|panic| {
-        if let Ok(mut stderr) = io::stderr().into_raw_mode() {
-            let _ = writeln!(stderr, "\r\n{panic}\r\n");
-            let _ = writeln!(stderr, "This should not have happened.");
-            let _ = writeln!(
-                stderr,
-                "Report at https://github.com/j-hc/zygisk-detach/issues"
-            );
-        }
+        let mut stderr = io::stderr();
+        let _ = writeln!(stderr, "\r\n{panic}\r\n");
+        let _ = writeln!(stderr, "This should not have happened.");
+        let _ = writeln!(
+            stderr,
+            "Report at https://github.com/j-hc/zygisk-detach/issues"
+        );
     }));
 
     let mut args = std::env::args().skip(1);
