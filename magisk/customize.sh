@@ -8,15 +8,16 @@ mv -f "$MODPATH/detach-${ARCH}" "$MODPATH/detach"
 rm "$MODPATH"/detach-*
 chmod +x "$MODPATH/detach"
 
-# preserve detach.bin
+mkdir -p /data/adb/zygisk-detach/
+
+# preserve detach.bin for older versions
 if [ -f "/data/adb/modules/zygisk-detach/detach.bin" ]; then
-	ui_print "- Preserving existing detach.bin"
-	cp -f "/data/adb/modules/zygisk-detach/detach.bin" "$MODPATH/detach.bin"
+	cp -f "/data/adb/modules/zygisk-detach/detach.bin" "/data/adb/zygisk-detach/detach.bin"
 fi
 
 if [ -f "$MODPATH/detach.txt" ]; then
 	ui_print "- detach.txt inside module! Generating detach.bin"
-	OP=$("$MODPATH"/detach serialize "$MODPATH/detach.txt" "$MODPATH/detach.bin" 2>&1)
+	OP=$("$MODPATH"/detach serialize "$MODPATH/detach.txt" "/data/adb/zygisk-detach/detach.bin" 2>&1)
 	ui_print "$OP"
 fi
 

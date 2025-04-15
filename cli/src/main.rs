@@ -18,7 +18,7 @@ mod menus;
 use menus::Menus;
 
 #[cfg(target_os = "android")]
-const MODULE_DETACH: &str = "/data/adb/modules/zygisk-detach/detach.bin";
+const MODULE_DETACH: &str = "/data/adb/zygisk-detach/detach.bin";
 #[cfg(target_os = "android")]
 const DETACH_TXT: &str = "/data/adb/modules/zygisk-detach/detach.txt";
 
@@ -26,10 +26,6 @@ const DETACH_TXT: &str = "/data/adb/modules/zygisk-detach/detach.txt";
 const MODULE_DETACH: &str = "detach.bin";
 #[cfg(target_os = "linux")]
 const DETACH_TXT: &str = "detach.txt";
-
-extern "C" {
-    fn kill(pid: i32, sig: i32) -> i32;
-}
 
 struct LocErr<E: Error> {
     source: E,
@@ -68,6 +64,10 @@ fn main() -> ExitCode {
         );
     }));
 
+    if !std::path::Path::new("/data/adb/zygisk-detach/").exists() {
+        std::fs::create_dir("/data/adb/zygisk-detach/").expect("zygisk-detach path");
+    }
+
     let mut args = std::env::args().skip(1);
     if let Some(cmd) = args.next().as_deref() {
         match cmd {
@@ -83,46 +83,54 @@ fn main() -> ExitCode {
                 if let Err(err) = serialize_txt(&dtxt, &dbin) {
                     eprintln!("ERROR: {err}");
                     return ExitCode::FAILURE;
-                } else {
-                    println!("Serialized detach.txt");
-                    return ExitCode::SUCCESS;
                 }
+                println!("Serialized detach.txt");
+                return ExitCode::SUCCESS;
             }
             "detachall" => {
-                let Some(pkg_names) = args.next() else {
-                    eprintln!("ERROR: package names not supplied.");
+                if args.len() == 0 {
+                    eprintln!("ERROR: No Package name(s) was supplied.");
                     return ExitCode::FAILURE;
-                };
+                }
                 let mut f = fs::OpenOptions::new()
                     .create(true)
                     .write(true)
                     .truncate(true)
                     .open(MODULE_DETACH)
                     .expect("open detach.bin");
-                if pkg_names.is_empty() {
-                    println!("Emptied the detach.bin");
-                    return ExitCode::SUCCESS;
-                }
-                for n in pkg_names.split(' ') {
-                    bin_serialize(n, &mut f).expect("write to detach.bin");
+                for pkg_name in args {
+                    bin_serialize(&pkg_name, &mut f).expect("write to detach.bin");
                 }
                 detach_bin_changed();
                 println!("Changes are applied. No need for a reboot!");
                 return ExitCode::SUCCESS;
             }
             "detach" => {
-                let Some(pkg_name) = args.next() else {
-                    eprintln!("ERROR: package name not supplied.");
-                    return ExitCode::FAILURE;
-                };
-                if pkg_name.is_empty() {
-                    eprintln!("ERROR: package name is empty.");
+                if args.len() == 0 {
+                    eprintln!("ERROR: No Package name(s) was supplied.");
                     return ExitCode::FAILURE;
                 }
-                if detach_by_name(&pkg_name).expect("detach.txt") {
-                    println!("Changes are applied. No need for a reboot!");
-                } else {
-                    println!("already detached: {}", pkg_name);
+                for pkg_name in args {
+                    if !detach_by_name(&pkg_name).expect("detach.txt") {
+                        println!("already detached: {}", pkg_name);
+                    }
+                }
+                println!("Changes are applied. No need for a reboot!");
+                return ExitCode::SUCCESS;
+            }
+            "reset" => {
+                match fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(MODULE_DETACH)
+                {
+                    Ok(_) => detach_bin_changed(),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => {
+                        eprintln!("ERROR: Could not delete '{MODULE_DETACH}': {e}");
+                        return ExitCode::FAILURE;
+                    }
                 }
                 return ExitCode::SUCCESS;
             }
@@ -145,7 +153,7 @@ fn main() -> ExitCode {
                     Ok(f) => f,
                     Err(e) if e.kind() == io::ErrorKind::NotFound => return ExitCode::SUCCESS,
                     Err(e) => {
-                        eprintln!("ERROR: {e}");
+                        eprintln!("ERROR: Could not list detached pkgs: {e}");
                         return ExitCode::FAILURE;
                     }
                 };
@@ -163,7 +171,14 @@ fn main() -> ExitCode {
                 }
                 return ExitCode::SUCCESS;
             }
-            _ => {}
+            s => {
+                eprintln!(
+                    "\
+Unexpected command: {s}
+Accepted commands are: 'detach', 'detachall', 'reset', 'list', 'serialize'"
+                );
+                return ExitCode::FAILURE;
+            }
         }
     }
 
@@ -388,7 +403,7 @@ fn main_menu(menus: &mut Menus) -> IOResult<Op> {
 }
 
 fn bin_serialize(app: &str, f: &mut File) -> IOResult<()> {
-    let mut w = Vec::with_capacity(2 * app.as_bytes().len() - 1);
+    let mut w = Vec::with_capacity(2 * app.len() - 1);
     for b in app.as_bytes()[..app.len() - 1].iter().cloned() {
         w.push(b);
         w.push(0);
@@ -427,7 +442,7 @@ fn detach_menu(menus: &mut Menus) -> IOResult<()> {
                             .contains(&input.to_ascii_lowercase())
                     })
                     .take(5)
-                    .map(|s| &s[..col.min(s.bytes().len())])
+                    .map(|s| &s[..col.min(s.len())])
                     .collect()
             } else {
                 Vec::new()
@@ -475,7 +490,11 @@ fn _kill_store_am() -> IOResult<()> {
 }
 
 fn kill_store() -> IOResult<()> {
-    const PKG: &str = "com.android.vending";
+    extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+
+    const PKG: &[u8] = b"com.android.vending";
     let mut buf = [0u8; PKG.len()];
     for proc in fs::read_dir("/proc")? {
         let mut proc = proc?.path();
@@ -486,11 +505,10 @@ fn kill_store() -> IOResult<()> {
         let Ok(mut cmdline) = fs::OpenOptions::new().read(true).open(&proc) else {
             continue;
         };
-        match cmdline.read(&mut buf) {
-            Ok(n) if n > 0 => {}
-            _ => continue,
+        if !cmdline.read(&mut buf).is_ok_and(|n| n > 0) {
+            continue;
         }
-        if buf.eq(PKG.as_bytes()) {
+        if buf.eq(PKG) {
             if let Some(pid) = proc.components().nth(2) {
                 let pid = pid.as_os_str().to_string_lossy();
                 let Ok(pid) = pid.parse::<i32>() else {

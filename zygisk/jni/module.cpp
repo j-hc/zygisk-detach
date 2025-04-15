@@ -162,7 +162,7 @@ class ZygiskDetach : public zygisk::ModuleBase {
 
 static void companion_handler(int remote_fd) {
     off_t size = 0;
-    int fd = open("/data/adb/modules/zygisk-detach/detach.bin", O_RDONLY);
+    int fd = open("/data/adb/zygisk-detach/detach.bin", O_RDONLY);
     if (fd == -1) {
         LOGD("ERROR: companion open");
         if (write(remote_fd, &size, sizeof(size)) < 0)

@@ -1,12 +1,26 @@
-import { exec, toast } from 'kernelsu';
+import { exec, spawn, toast } from 'kernelsu';
 
 const template = document.getElementById('app-template').content;
 const appsList = document.getElementById('apps-list');
 
 async function run(cmd) {
+	const LOG_DIR = "/sdcard/zyisk-detach.log";
 	const { errno, stdout, stderr } = await exec(cmd);
 	if (errno != 0) {
-		toast(`stderr: ${stderr}`);
+		toast(`Command '${cmd}' fail.`)
+		toast(stderr);
+		// this is not properly escaped, whatever
+		const fullLog = `\
+CMD: ${cmd}
+
+STDERR:
+${stderr}
+
+STDOUT:
+${stdout}`.replaceAll("'", "\'");
+		exec(`echo '${fullLog}' > '${LOG_DIR}'`).then(() => {
+			toast(`Full logs are saved in '${LOG_DIR}'`);
+		});
 		return undefined;
 	} else {
 		return stdout;
@@ -69,8 +83,12 @@ async function main() {
 	});
 
 	document.getElementById("detach").addEventListener('click', (e) => {
-		const detach_arg = detach_list.join(' ');
-		run(`/data/adb/modules/zygisk-detach/detach detachall "${detach_arg}"`).then((out) => toast(out));
+		if (detach_list.length == 0) {
+			run("/data/adb/modules/zygisk-detach/detach reset");
+		} else {
+			const detach_arg = detach_list.join(' ');
+			run(`/data/adb/modules/zygisk-detach/detach detachall ${detach_arg}`).then((out) => toast(out));
+		}
 	});
 }
 
