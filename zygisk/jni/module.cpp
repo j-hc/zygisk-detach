@@ -67,8 +67,8 @@ class ZygiskDetach : public zygisk::ModuleBase {
 
     void preAppSpecialize(zygisk::AppSpecializeArgs* args) override {
         const char* process = env->GetStringUTFChars(args->nice_name, nullptr);
-#define vending "com.android.vending"
-        if (memcmp(process, vending, STR_LEN(vending))) {
+        const char vending_pkg[] = "com.android.vending";
+        if (memcmp(process, vending_pkg, ARR_LEN(vending_pkg))) {
             env->ReleaseStringUTFChars(args->nice_name, process);
             api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
             return;
@@ -146,14 +146,13 @@ class ZygiskDetach : public zygisk::ModuleBase {
             return 0;
         }
         DETACH_TXT = (uint8_t*)malloc(size + 1);
-        auto r = read(fd, DETACH_TXT, size);
-        if (r < 0) {
-            LOGD("ERROR: read companion");
-            return 0;
-        }
-        if (r != size) {
-            LOGD("ERROR: read companion not whole");
-            return 0;
+        off_t size_read = 0;
+        while (size_read < size) {
+            size_read += read(fd, DETACH_TXT, size - size_read);
+            if (size_read < 0) {
+                LOGD("ERROR: read companion, %ld bytes", size_read);
+                return 0;
+            }
         }
         DETACH_TXT[size] = 0;
         return (size_t)size;

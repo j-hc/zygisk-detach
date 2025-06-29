@@ -3,8 +3,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define ARRAY_LEN(a) (sizeof(a) / sizeof((a)[0]))
-#define STR_LEN(a) (ARRAY_LEN(a) - 1)
+#define ARR_LEN(a) (sizeof(a) / sizeof((a)[0]))
+#define STR_LEN(a) (ARR_LEN(a) - 1)
 
 #define getPackageInfo_code 3
 
