@@ -67,7 +67,7 @@ class ZygiskDetach : public zygisk::ModuleBase {
 
     void preAppSpecialize(zygisk::AppSpecializeArgs* args) override {
         const char* process = env->GetStringUTFChars(args->nice_name, nullptr);
-        const char vending_pkg[] = "com.android.vending";
+#define vending_pkg "com.android.vending"
         if (memcmp(process, vending_pkg, ARR_LEN(vending_pkg))) {
             env->ReleaseStringUTFChars(args->nice_name, process);
             api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);

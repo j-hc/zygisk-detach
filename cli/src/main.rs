@@ -490,7 +490,7 @@ fn _kill_store_am() -> IOResult<()> {
 }
 
 fn kill_store() -> IOResult<()> {
-    extern "C" {
+    unsafe extern "C" {
         fn kill(pid: i32, sig: i32) -> i32;
     }
 

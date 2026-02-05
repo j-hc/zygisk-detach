@@ -28,7 +28,7 @@ fi
 
 CLIPATH=/data/data/com.termux/files/usr/bin/
 if [ -d $CLIPATH ]; then
-	echo "su -c /data/adb/modules/zygisk-detach/detach" >$CLIPATH/detach
+	echo 'su -c /data/adb/modules/zygisk-detach/detach "$@"' >$CLIPATH/detach
 	chmod 777 $CLIPATH/detach
 	ui_print "- Run 'detach' in termux after the reboot"
 else
