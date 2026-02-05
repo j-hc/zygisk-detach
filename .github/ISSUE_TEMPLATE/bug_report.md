@@ -11,8 +11,6 @@ assignees: ''
 
 **Android version and ROM:**
 
-**Screenshot of the helper CLI showing detached apps:**
-
 **Logs taken with `su -c logcat -d -s "zygisk-detach" > /sdcard/log.txt`:**
 
 Not providing this information will get your issue closed without any response!
