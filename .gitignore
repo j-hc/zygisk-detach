@@ -9,3 +9,12 @@ magisk/webroot/*
 zygisk-rust
 aidl/*.aidl*
 .clangd
+
+# OS specifics
+.DS_Store
+
+# IDEs & Editors
+.idea/
+.vscode/
+*.iml
+local.properties
