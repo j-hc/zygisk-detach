@@ -83,7 +83,9 @@ static size_t read_companion(int fd) {
 }
 
 static bool runPreSpecialize(const char* process, zygisk::Api* api) {
-    if (memcmp(process, VENDING_PROC, STR_LEN(VENDING_PROC)) != 0) return false;
+    // Process names can be shorter than the Play Store prefix (e.g. webview_zygote).
+    // A fixed-size memcmp may read past their allocation and trigger an MTE fault.
+    if (strncmp(process, VENDING_PROC, STR_LEN(VENDING_PROC)) != 0) return false;
 
     int fd = api->connectCompanion();
     size_t detach_len = read_companion(fd);
