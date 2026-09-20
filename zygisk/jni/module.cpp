@@ -83,7 +83,7 @@ static size_t read_companion(int fd) {
 }
 
 static bool runPreSpecialize(const char* process, zygisk::Api* api) {
-    if (memcmp(process, VENDING_PROC, STR_LEN(VENDING_PROC)) != 0) return false;
+    if (strncmp(process, VENDING_PROC, STR_LEN(VENDING_PROC)) != 0) return false;
 
     int fd = api->connectCompanion();
     size_t detach_len = read_companion(fd);
