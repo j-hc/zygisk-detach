@@ -25,12 +25,6 @@ mv -f "$MODPATH/bin/$ARCH/detach" "$MODPATH/detach"
 mkdir -p /data/adb/zygisk-detach/
 
 DBIN="/data/adb/zygisk-detach/detach.bin"
-
-# preserve detach.bin for older versions
-if [ -f "/data/adb/modules/zygisk-detach/detach.bin" ]; then
-	cp -f "/data/adb/modules/zygisk-detach/detach.bin" $DBIN
-fi
-
 if [ -f "$MODPATH/detach.txt" ]; then
 	ui_print "- detach.txt inside module: generating detach.bin"
 	OP=$("$MODPATH"/detach serialize "$MODPATH/detach.txt" $DBIN 2>&1)
@@ -51,7 +45,7 @@ fi
 
 ui_print "- Or use zygisk-detach-app"
 if [ -n "$KSU" ]; then
-	ui_print "- Or use the WebUI from KernelSU app"
+	ui_print "- Or use the WebUI"
 fi
 ui_print ""
 ui_print "  by j-hc (github.com/j-hc)"
